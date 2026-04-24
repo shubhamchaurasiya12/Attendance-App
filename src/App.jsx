@@ -13,7 +13,7 @@ import WorkerDetails from "./pages/WorkerDetails";
 
 import { syncToCloud, syncFromCloud } from "./services/sync";
 
-// ── Icons (inline SVG, no dependency) ─────────────────────
+// ── Icons ──────────────────────────────────────────────────
 const IconWorkers = ({ active }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
     <circle cx="9" cy="7" r="3.5" stroke={active ? "#534AB7" : "#aaa"} strokeWidth="1.8"/>
@@ -31,15 +31,13 @@ const IconAttendance = ({ active }) => (
   </svg>
 );
 
-// ── Nav needs location, so split into inner component ──────
+// ── AppShell ───────────────────────────────────────────────
 function AppShell({ isSyncing, isOnline, message, onSync }) {
   const location = useLocation();
-
-  // Hide bottom nav on worker detail page
   const hideNav = location.pathname.startsWith("/worker/");
 
   const navItems = [
-    { to: "/", label: "Workers", Icon: IconWorkers },
+    { to: "/",           label: "Workers",    Icon: IconWorkers    },
     { to: "/attendance", label: "Attendance", Icon: IconAttendance },
   ];
 
@@ -51,10 +49,13 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
         <div style={s.statusLeft}>
           <span style={{
             ...s.dot,
-            background: isOnline ? "#3B6D11" : "#993C1D",
-            boxShadow: isOnline ? "0 0 0 3px #EAF3DE" : "0 0 0 3px #FAECE7",
-          }} />
-          <span style={{ ...s.statusText, color: isOnline ? "#3B6D11" : "#993C1D" }}>
+            background:  isOnline ? "#3B6D11"          : "#993C1D",
+            boxShadow:   isOnline ? "0 0 0 3px #EAF3DE" : "0 0 0 3px #FAECE7",
+          }}/>
+          <span style={{
+            ...s.statusText,
+            color: isOnline ? "#3B6D11" : "#993C1D",
+          }}>
             {isOnline ? "Online" : "Offline"}
           </span>
         </div>
@@ -71,10 +72,8 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
             opacity: isSyncing || !isOnline ? 0.45 : 1,
           }}
         >
-          <svg
-            width="13" height="13" viewBox="0 0 24 24" fill="none"
-            style={{ marginRight: "5px", flexShrink: 0 }}
-          >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+            style={{ marginRight: "5px", flexShrink: 0 }}>
             <path d="M4 12a8 8 0 0114.93-4M20 12a8 8 0 01-14.93 4"
               stroke="#fff" strokeWidth="2.2" strokeLinecap="round"/>
             <path d="M18.5 4.5L19 8h-3.5M5.5 19.5L5 16h3.5"
@@ -84,11 +83,11 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
         </button>
       </div>
 
-      {/* ── CONTENT ── */}
+      {/* ── SCROLLABLE CONTENT ── */}
       <div style={s.content}>
         <Routes>
-          <Route path="/" element={<Workers />} />
-          <Route path="/attendance" element={<Attendance />} />
+          <Route path="/"           element={<Workers />}       />
+          <Route path="/attendance" element={<Attendance />}    />
           <Route path="/worker/:id" element={<WorkerDetails />} />
         </Routes>
       </div>
@@ -104,7 +103,7 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
               style={{ textDecoration: "none", flex: 1 }}
             >
               {({ isActive }) => (
-                <div style={{ ...s.navItem, ...(isActive ? s.navItemActive : {}) }}>
+                <div style={s.navItem}>
                   <div style={{
                     ...s.iconWrap,
                     background: isActive ? "#EEEDFE" : "transparent",
@@ -113,8 +112,8 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
                   </div>
                   <span style={{
                     ...s.navLabel,
-                    color: isActive ? "#534AB7" : "#aaa",
-                    fontWeight: isActive ? "600" : "400",
+                    color:      isActive ? "#534AB7" : "#aaa",
+                    fontWeight: isActive ? "600"     : "400",
                   }}>
                     {label}
                   </span>
@@ -132,8 +131,8 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
 // ── Root ───────────────────────────────────────────────────
 export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [message, setMessage] = useState("");
+  const [isOnline,  setIsOnline]  = useState(navigator.onLine);
+  const [message,   setMessage]   = useState("");
 
   useEffect(() => {
     const init = async () => {
@@ -144,13 +143,13 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleOnline = () => { setIsOnline(true); autoSync(); };
+    const handleOnline  = () => { setIsOnline(true);  autoSync(); };
     const handleOffline = () => { setIsOnline(false); setMessage("Offline mode"); };
 
-    window.addEventListener("online", handleOnline);
+    window.addEventListener("online",  handleOnline);
     window.addEventListener("offline", handleOffline);
     return () => {
-      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("online",  handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
   }, []);
@@ -186,17 +185,20 @@ export default function App() {
 }
 
 const s = {
+  // ── Container — locked to viewport, nothing overflows
   container: {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
+    maxHeight: "100vh",       // lock to viewport height
+    overflow: "hidden",       // prevent full-page scroll
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     background: "#f4f3ff",
     maxWidth: "480px",
     margin: "0 auto",
   },
 
-  // ── Status bar
+  // ── Status bar — pinned at top
   statusBar: {
     display: "flex",
     alignItems: "center",
@@ -205,6 +207,7 @@ const s = {
     background: "#ffffff",
     borderBottom: "1px solid #eeecfd",
     minHeight: "42px",
+    flexShrink: 0,            // never shrink — always visible
     gap: "8px",
   },
   statusLeft: {
@@ -243,22 +246,23 @@ const s = {
     flexShrink: 0,
   },
 
-  // ── Content
+  // ── Content — only this div scrolls
   content: {
-    flex: 1,
-    overflowY: "auto",
+    flex: 1,                          // fills all space between status bar and nav
+    overflowY: "auto",                // scrolls independently
     overflowX: "hidden",
-    padding: "0",          // pages manage their own padding
+    WebkitOverflowScrolling: "touch", // smooth momentum scroll on iOS
   },
 
-  // ── Bottom nav
+  // ── Bottom nav — pinned at bottom
   nav: {
     display: "flex",
     background: "#ffffff",
     borderTop: "1px solid #eeecfd",
-    padding: "6px 16px 10px",  // extra bottom for home indicator on iOS
-    paddingBottom: "max(10px, env(safe-area-inset-bottom))", // iPhone notch safe area
+    padding: "6px 16px",
+    paddingBottom: "max(10px, env(safe-area-inset-bottom))", // iPhone home bar safe area
     gap: "8px",
+    flexShrink: 0,            // never shrink — always visible
   },
   navItem: {
     display: "flex",
@@ -269,7 +273,6 @@ const s = {
     cursor: "pointer",
     WebkitTapHighlightColor: "transparent",
   },
-  navItemActive: {},
   iconWrap: {
     width: "48px",
     height: "30px",
@@ -277,7 +280,6 @@ const s = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    transition: "background 0.15s",
   },
   navLabel: {
     fontSize: "11px",
