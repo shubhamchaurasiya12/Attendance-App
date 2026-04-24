@@ -1,43 +1,52 @@
 import { useEffect, useState } from "react";
 import {
-  getWorkers,
-  getAttendance,
+  subscribeWorkers,
+  subscribeAttendance,
   upsertAttendance,
 } from "../services/storage";
 import { getTodayDate } from "../utils/date";
 import { ATTENDANCE_STATUS } from "../utils/constants";
 import { createAttendanceEntry } from "../utils/attendance";
-import { syncToCloud } from "../services/sync";
 
 export default function Attendance() {
   const [workers, setWorkers] = useState([]);
+  const [attendance, setAttendance] = useState([]);
   const [date, setDate] = useState(getTodayDate());
   const [draft, setDraft] = useState({});
   const [isSaving, setIsSaving] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info");
 
+  // 🔥 REALTIME WORKERS
   useEffect(() => {
-    setWorkers(getWorkers());
+    const unsub = subscribeWorkers(setWorkers);
+    return () => unsub();
+  }, []);
+
+  // 🔥 REALTIME ATTENDANCE
+  useEffect(() => {
+    const unsub = subscribeAttendance(setAttendance);
+    return () => unsub();
   }, []);
 
   const activeWorkers = workers.filter((w) => w.isActive);
 
+  // 🔥 AUTO BUILD DRAFT FROM FIRESTORE
   useEffect(() => {
-    const attendance = getAttendance();
     const initial = {};
+
     activeWorkers.forEach((w) => {
       const existing = attendance.find(
         (a) => a.workerId === w.id && a.date === date
       );
+
       initial[w.id] = {
         status: existing?.status || null,
         advance: existing?.advance || 0,
       };
     });
+
     setDraft(initial);
-  }, [date, workers]);
+  }, [workers, attendance, date]);
 
   const setStatus = (workerId, status) => {
     setDraft((prev) => ({
@@ -49,220 +58,148 @@ export default function Attendance() {
   const setAdvance = (workerId, value) => {
     setDraft((prev) => ({
       ...prev,
-      [workerId]: { ...prev[workerId], advance: Number(value) || 0 },
+      [workerId]: {
+        ...prev[workerId],
+        advance: Number(value) || 0,
+      },
     }));
   };
 
   const isUnmarked = (workerId) => !draft[workerId]?.status;
 
-  const unmarkedCount = activeWorkers.filter((w) => isUnmarked(w.id)).length;
+  const unmarkedCount = activeWorkers.filter((w) =>
+    isUnmarked(w.id)
+  ).length;
 
-  const showMessage = (text, type = "info") => {
+  const showMessage = (text) => {
     setMessage(text);
-    setMessageType(type);
-    setTimeout(() => setMessage(""), 1800);
+    setTimeout(() => setMessage(""), 1500);
   };
 
-  const handleSave = () => {
+  // 🔥 SAVE DIRECTLY TO FIRESTORE
+  const handleSave = async () => {
     if (isSaving) return;
-    if (!confirm("Save attendance for this date?")) return;
+    if (!confirm("Save attendance?")) return;
+
     setIsSaving(true);
+
     try {
-      activeWorkers.forEach((w) => {
-        const entry = createAttendanceEntry({
-          workerId: w.id,
-          date,
-          status: draft[w.id]?.status || ATTENDANCE_STATUS.ABSENT,
-          advance: draft[w.id]?.advance,
-        });
-        upsertAttendance(entry);
-      });
-      showMessage("Attendance saved!", "success");
+      await Promise.all(
+        activeWorkers.map((w) => {
+          const entry = createAttendanceEntry({
+            workerId: w.id,
+            date,
+            status:
+              draft[w.id]?.status ||
+              ATTENDANCE_STATUS.ABSENT,
+            advance: draft[w.id]?.advance,
+          });
+
+          return upsertAttendance(entry);
+        })
+      );
+
+      showMessage("Saved!");
     } catch (err) {
       console.error(err);
-      showMessage("Save failed", "error");
+      showMessage("Save failed");
     }
-    setTimeout(() => setIsSaving(false), 1800);
+
+    setTimeout(() => setIsSaving(false), 1500);
   };
-
-  const handleSync = async () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
-    try {
-      await syncToCloud();
-      showMessage("Synced successfully!", "success");
-    } catch (err) {
-      console.error(err);
-      showMessage("Sync failed", "error");
-    }
-    setTimeout(() => setIsSyncing(false), 2000);
-  };
-
-  const getInitials = (name) =>
-    name.trim().split(" ").map((n) => n[0]?.toUpperCase() ?? "").slice(0, 2).join("");
-
-  const statusLabel = (status) => {
-    if (status === ATTENDANCE_STATUS.FULL)     return "Present — 8 hrs";
-    if (status === ATTENDANCE_STATUS.OVERTIME) return "Overtime — 12 hrs";
-    if (status === ATTENDANCE_STATUS.ABSENT)   return "Absent";
-    return "Not marked yet";
-  };
-
-  const statusOptions = [
-    { key: ATTENDANCE_STATUS.ABSENT,   label: "Absent", activeStyle: s.btnAbsentActive },
-    { key: ATTENDANCE_STATUS.FULL,     label: "8 hrs",  activeStyle: s.btnFullActive   },
-    { key: ATTENDANCE_STATUS.OVERTIME, label: "12 hrs", activeStyle: s.btnOTActive     },
-  ];
 
   return (
-    // Outer wrapper: fills the scroll container passed down from App.jsx
     <div style={s.page}>
-
-      {/* ── STICKY HEADER ── */}
-      <div style={s.header}>
-        <div>
-          <h2 style={s.heading}>Attendance</h2>
-          <p style={s.subHeading}>
-            {activeWorkers.length === 0
-              ? "No active workers"
-              : unmarkedCount > 0
-              ? `${unmarkedCount} worker${unmarkedCount > 1 ? "s" : ""} unmarked`
-              : "All workers marked ✓"}
-          </p>
-        </div>
-
-        <button
-          onClick={handleSync}
-          disabled={isSyncing}
-          style={{ ...s.syncBtn, opacity: isSyncing ? 0.5 : 1 }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-            style={{ marginRight: "5px", flexShrink: 0 }}>
-            <path d="M4 12a8 8 0 0114.93-4M20 12a8 8 0 01-14.93 4"
-              stroke="#534AB7" strokeWidth="2.2" strokeLinecap="round"/>
-            <path d="M18.5 4.5L19 8h-3.5M5.5 19.5L5 16h3.5"
-              stroke="#534AB7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          {isSyncing ? "Syncing..." : "Sync"}
-        </button>
-      </div>
-
-      {/* ── SCROLLABLE BODY ── */}
-      <div style={s.body}>
-
-        {/* Date picker */}
-        <div style={s.dateCard}>
-          <label style={s.dateLabel}>Date</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            style={s.dateInput}
-          />
-        </div>
-
-        {/* Toast */}
-        {message && (
-          <div style={{
-            ...s.toast,
-            background:  messageType === "success" ? "#EAF3DE" : messageType === "error" ? "#FAECE7" : "#EEEDFE",
-            color:       messageType === "success" ? "#3B6D11" : messageType === "error" ? "#993C1D" : "#3C3489",
-            borderColor: messageType === "success" ? "#97C459" : messageType === "error" ? "#F0997B" : "#AFA9EC",
-          }}>
-            {message}
+      <div style={s.container}>
+        {/* Header */}
+        <div style={s.header}>
+          <div>
+            <h1 style={s.heading}>Attendance</h1>
+            <p style={s.subHeading}>
+              {unmarkedCount > 0
+                ? `${unmarkedCount} worker${unmarkedCount !== 1 ? "s" : ""} not marked`
+                : "All workers marked"}
+            </p>
           </div>
-        )}
+          <div style={s.dateWrapper}>
+            <label style={s.dateLabel}>Date</label>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              style={s.dateInput}
+            />
+          </div>
+        </div>
 
-        {/* Worker cards */}
+        {/* Toast message */}
+        {message && <div style={s.toast}>{message}</div>}
+
+        {/* Workers list */}
         {activeWorkers.length === 0 ? (
           <div style={s.emptyState}>
-            <div style={s.emptyIcon}>👷</div>
-            <p style={s.emptyTitle}>No active workers</p>
-            <p style={s.emptyHint}>Add or restore workers from the Workers tab</p>
+            <span style={s.emptyIcon}>👷</span>
+            <p>No active workers</p>
           </div>
         ) : (
-          <div style={s.list}>
+          <div style={s.listContainer}>
             {activeWorkers.map((w) => {
               const current = draft[w.id] || {};
-              const unmarked = isUnmarked(w.id);
+              const selectedStatus = current.status;
 
               return (
-                <div
-                  key={w.id}
-                  style={{
-                    ...s.card,
-                    borderColor: unmarked ? "#FAC775" : "#eeecfd",
-                    background:  unmarked ? "#FAEEDA" : "#ffffff",
-                  }}
-                >
-                  {/* Top row */}
-                  <div style={s.cardTop}>
-                    <div style={{
-                      ...s.avatar,
-                      background: unmarked ? "#FAC775" : "#EEEDFE",
-                      color:      unmarked ? "#633806" : "#3C3489",
-                    }}>
-                      {getInitials(w.name)}
-                    </div>
-
-                    <div style={s.workerInfo}>
-                      <p style={s.workerName}>{w.name}</p>
-                      <p style={{
-                        ...s.workerStatus,
-                        color: unmarked
-                          ? "#854F0B"
-                          : current.status === ATTENDANCE_STATUS.ABSENT
-                          ? "#993C1D"
-                          : "#3B6D11",
-                      }}>
-                        {statusLabel(current.status)}
-                      </p>
-                    </div>
-
-                    {!unmarked && (
-                      <span style={{
-                        ...s.statusDot,
-                        background: current.status === ATTENDANCE_STATUS.ABSENT
-                          ? "#FAECE7"
-                          : current.status === ATTENDANCE_STATUS.OVERTIME
-                          ? "#EEEDFE"
-                          : "#EAF3DE",
-                        color: current.status === ATTENDANCE_STATUS.ABSENT
-                          ? "#993C1D"
-                          : current.status === ATTENDANCE_STATUS.OVERTIME
-                          ? "#3C3489"
-                          : "#3B6D11",
-                      }}>
-                        {current.status === ATTENDANCE_STATUS.ABSENT
-                          ? "A"
-                          : current.status === ATTENDANCE_STATUS.FULL
-                          ? "8h" : "12h"}
+                <div key={w.id} style={s.card}>
+                  <div style={s.cardHeader}>
+                    <strong style={s.workerName}>{w.name}</strong>
+                    {selectedStatus && (
+                      <span style={s.statusBadge}>
+                        {selectedStatus === ATTENDANCE_STATUS.FULL && "8h"}
+                        {selectedStatus === ATTENDANCE_STATUS.OVERTIME && "12h"}
+                        {selectedStatus === ATTENDANCE_STATUS.ABSENT && "Absent"}
                       </span>
                     )}
                   </div>
 
-                  {/* Status buttons */}
-                  <div style={s.statusRow}>
-                    {statusOptions.map((opt) => (
-                      <button
-                        key={opt.key}
-                        style={{
-                          ...s.statusBtn,
-                          ...(current.status === opt.key ? opt.activeStyle : {}),
-                        }}
-                        onClick={() => setStatus(w.id, opt.key)}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                  <div style={s.statusButtons}>
+                    <button
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.ABSENT)}
+                      style={{
+                        ...s.statusBtn,
+                        background: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#f1f5f9" : "#fff",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#cbd5e1" : "#e2e8f0",
+                        color: "#1e293b",
+                      }}
+                    >
+                      Absent
+                    </button>
+                    <button
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.FULL)}
+                      style={{
+                        ...s.statusBtn,
+                        background: selectedStatus === ATTENDANCE_STATUS.FULL ? "#e0e7ff" : "#fff",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.FULL ? "#a5b4fc" : "#e2e8f0",
+                        color: selectedStatus === ATTENDANCE_STATUS.FULL ? "#4338ca" : "#1e293b",
+                      }}
+                    >
+                      8h
+                    </button>
+                    <button
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.OVERTIME)}
+                      style={{
+                        ...s.statusBtn,
+                        background: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#fef3c7" : "#fff",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#fcd34d" : "#e2e8f0",
+                        color: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#b45309" : "#1e293b",
+                      }}
+                    >
+                      12h
+                    </button>
                   </div>
 
-                  {/* Advance */}
-                  <div style={s.advanceRow}>
+                  <div style={s.advanceField}>
                     <label style={s.advanceLabel}>Advance (₹)</label>
                     <input
                       type="number"
-                      inputMode="numeric"
                       placeholder="0"
                       value={current.advance || ""}
                       onChange={(e) => setAdvance(w.id, e.target.value)}
@@ -274,279 +211,221 @@ export default function Attendance() {
             })}
           </div>
         )}
+
+        {/* Save button */}
+        {activeWorkers.length > 0 && (
+          <div style={s.footer}>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              style={{
+                ...s.saveBtn,
+                opacity: isSaving ? 0.6 : 1,
+              }}
+            >
+              {isSaving ? "Saving..." : "Save attendance"}
+            </button>
+          </div>
+        )}
       </div>
-
-      {/* ── STICKY SAVE FOOTER ── */}
-      {activeWorkers.length > 0 && (
-        <div style={s.saveFooter}>
-          {unmarkedCount > 0 && (
-            <p style={s.saveWarning}>
-              {unmarkedCount} unmarked worker{unmarkedCount > 1 ? "s" : ""} will be saved as Absent
-            </p>
-          )}
-          <button
-            style={{ ...s.saveBtn, opacity: isSaving ? 0.6 : 1 }}
-            onClick={handleSave}
-            disabled={isSaving}
-          >
-            {isSaving ? "Saving..." : "Save Attendance"}
-          </button>
-        </div>
-      )}
-
     </div>
   );
 }
 
+// 🎨 Clean, minimal styling
 const s = {
-  // Fills the scroll container from App.jsx — no min-height or padding-bottom hacks
   page: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",           // fills the content div in App.jsx exactly
-    background: "#f4f3ff",
-    overflow: "hidden",       // page itself doesn't scroll — body div does
+    background: "#f8fafc",
+    minHeight: "100vh",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
-
-  // ── Sticky header — never scrolls away
+  container: {
+    maxWidth: "720px",
+    margin: "0 auto",
+    padding: "32px 24px",
+  },
   header: {
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    padding: "16px 16px 12px",
-    background: "#ffffff",
-    borderBottom: "1px solid #eeecfd",
-    flexShrink: 0,            // won't compress
+    alignItems: "flex-start",
+    marginBottom: "32px",
+    flexWrap: "wrap",
+    gap: "20px",
   },
   heading: {
-    fontSize: "20px",
-    fontWeight: "700",
-    color: "#1a1a2e",
-    lineHeight: 1.2,
+    fontSize: "28px",
+    fontWeight: "600",
+    color: "#0f172a",
+    letterSpacing: "-0.01em",
+    margin: "0 0 6px 0",
   },
   subHeading: {
-    fontSize: "12px",
-    color: "#888",
-    marginTop: "2px",
-  },
-  syncBtn: {
-    display: "flex",
-    alignItems: "center",
-    height: "34px",
-    padding: "0 14px",
-    background: "#EEEDFE",
-    color: "#534AB7",
-    border: "1.5px solid #AFA9EC",
-    borderRadius: "20px",
-    fontSize: "13px",
-    fontWeight: "600",
-    cursor: "pointer",
-    flexShrink: 0,
-  },
-
-  // ── Scrollable middle — grows to fill remaining space
-  body: {
-    flex: 1,
-    overflowY: "auto",
-    overflowX: "hidden",
-    WebkitOverflowScrolling: "touch",
-    padding: "0 0 8px 0",
-  },
-
-  // ── Date card
-  dateCard: {
-    background: "#ffffff",
-    margin: "10px 12px 0",
-    borderRadius: "14px",
-    padding: "12px 16px",
-    border: "1px solid #eeecfd",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "12px",
-  },
-  dateLabel: {
     fontSize: "14px",
-    fontWeight: "600",
-    color: "#555",
+    color: "#475569",
+    margin: 0,
   },
-  dateInput: {
-    height: "36px",
-    padding: "0 10px",
-    border: "1.5px solid #e4e2f8",
-    borderRadius: "10px",
-    fontSize: "14px",
-    color: "#1a1a2e",
-    background: "#faf9ff",
-    outline: "none",
-    WebkitAppearance: "none",
-  },
-
-  // ── Toast
-  toast: {
-    margin: "8px 12px 0",
-    padding: "9px 14px",
-    borderRadius: "10px",
-    border: "1px solid",
-    fontSize: "13px",
-    fontWeight: "600",
-    textAlign: "center",
-  },
-
-  // ── Empty state
-  emptyState: {
-    margin: "12px",
-    padding: "36px 20px",
-    background: "#ffffff",
-    border: "2px dashed #d6d3f5",
-    borderRadius: "16px",
-    textAlign: "center",
-  },
-  emptyIcon:  { fontSize: "36px", marginBottom: "10px" },
-  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#444" },
-  emptyHint:  { fontSize: "13px", color: "#aaa", marginTop: "6px", lineHeight: 1.5 },
-
-  // ── Worker list
-  list: {
+  dateWrapper: {
     display: "flex",
     flexDirection: "column",
-    gap: "10px",
-    padding: "10px 12px 0",
+    gap: "6px",
   },
-
-  // ── Worker card
-  card: {
-    borderRadius: "14px",
-    border: "1.5px solid",
-    padding: "12px 14px",
-  },
-  cardTop: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    marginBottom: "12px",
-  },
-  avatar: {
-    width: "40px",
-    height: "40px",
-    minWidth: "40px",
-    borderRadius: "50%",
-    fontSize: "13px",
-    fontWeight: "700",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  workerInfo: { flex: 1, minWidth: 0 },
-  workerName: {
-    fontSize: "14px",
-    fontWeight: "600",
-    color: "#1a1a2e",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  workerStatus: {
+  dateLabel: {
     fontSize: "12px",
     fontWeight: "500",
-    marginTop: "2px",
+    color: "#64748b",
+    letterSpacing: "0.3px",
   },
-  statusDot: {
-    fontSize: "11px",
-    fontWeight: "700",
-    padding: "3px 9px",
-    borderRadius: "20px",
-    flexShrink: 0,
+  dateInput: {
+    padding: "8px 12px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "40px",
+    fontSize: "14px",
+    fontFamily: "inherit",
+    background: "#fff",
+    outline: "none",
+    transition: "all 0.2s",
   },
-
-  // ── Status buttons
-  statusRow: {
+  toast: {
+    background: "#1e293b",
+    color: "#fff",
+    padding: "10px 20px",
+    borderRadius: "40px",
+    fontSize: "14px",
+    textAlign: "center",
+    marginBottom: "24px",
+    width: "fit-content",
+    marginLeft: "auto",
+    marginRight: "auto",
+  },
+  emptyState: {
+    textAlign: "center",
+    padding: "48px 24px",
+    background: "#fff",
+    borderRadius: "24px",
+    border: "1px solid #f1f5f9",
+    color: "#64748b",
+  },
+  emptyIcon: {
+    fontSize: "48px",
+    display: "block",
+    marginBottom: "16px",
+    opacity: 0.7,
+  },
+  listContainer: {
     display: "flex",
-    gap: "6px",
-    marginBottom: "10px",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  card: {
+    background: "#fff",
+    borderRadius: "24px",
+    padding: "20px",
+    border: "1px solid #f0f2f5",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
+    transition: "all 0.2s",
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "18px",
+  },
+  workerName: {
+    fontSize: "18px",
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  statusBadge: {
+    fontSize: "12px",
+    fontWeight: "500",
+    background: "#f1f5f9",
+    padding: "4px 10px",
+    borderRadius: "30px",
+    color: "#334155",
+  },
+  statusButtons: {
+    display: "flex",
+    gap: "10px",
+    marginBottom: "20px",
+    flexWrap: "wrap",
   },
   statusBtn: {
     flex: 1,
-    height: "38px",
-    border: "1.5px solid #e4e2f8",
-    borderRadius: "10px",
-    fontSize: "13px",
-    fontWeight: "600",
-    background: "#faf9ff",
-    color: "#888",
+    padding: "8px 12px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "40px",
+    fontSize: "14px",
+    fontWeight: "500",
     cursor: "pointer",
-    WebkitTapHighlightColor: "transparent",
+    transition: "all 0.2s",
+    background: "#fff",
+    textAlign: "center",
   },
-  btnAbsentActive: {
-    background: "#FAECE7",
-    borderColor: "#F0997B",
-    color: "#993C1D",
-  },
-  btnFullActive: {
-    background: "#EAF3DE",
-    borderColor: "#97C459",
-    color: "#3B6D11",
-  },
-  btnOTActive: {
-    background: "#EEEDFE",
-    borderColor: "#7F77DD",
-    color: "#3C3489",
-  },
-
-  // ── Advance input
-  advanceRow: {
+  advanceField: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
+    flexWrap: "wrap",
   },
   advanceLabel: {
     fontSize: "13px",
-    fontWeight: "600",
-    color: "#888",
-    flexShrink: 0,
+    fontWeight: "500",
+    color: "#475569",
   },
   advanceInput: {
     flex: 1,
-    height: "38px",
-    padding: "0 12px",
-    border: "1.5px solid #e4e2f8",
-    borderRadius: "10px",
+    padding: "8px 12px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "24px",
     fontSize: "14px",
-    color: "#1a1a2e",
-    background: "#faf9ff",
+    fontFamily: "inherit",
     outline: "none",
-    WebkitAppearance: "none",
-    boxSizing: "border-box",
+    transition: "all 0.2s",
   },
-
-  // ── Sticky save footer — pinned to bottom of page, above nav
-  saveFooter: {
-    padding: "10px 12px",
-    background: "#f4f3ff",
-    borderTop: "1px solid #eeecfd",
-    flexShrink: 0,            // never shrinks away
-  },
-  saveWarning: {
-    fontSize: "12px",
-    color: "#854F0B",
-    background: "#FAEEDA",
-    border: "1px solid #FAC775",
-    borderRadius: "8px",
-    padding: "7px 12px",
-    marginBottom: "8px",
-    textAlign: "center",
-    fontWeight: "500",
+  footer: {
+    marginTop: "40px",
+    display: "flex",
+    justifyContent: "flex-end",
   },
   saveBtn: {
-    width: "100%",
-    height: "48px",
-    background: "#534AB7",
+    background: "#4f46e5",
     color: "#fff",
     border: "none",
-    borderRadius: "12px",
+    borderRadius: "40px",
+    padding: "12px 28px",
     fontSize: "15px",
-    fontWeight: "600",
+    fontWeight: "500",
     cursor: "pointer",
-    WebkitTapHighlightColor: "transparent",
+    transition: "all 0.2s",
+    width: "100%",
+    maxWidth: "200px",
   },
 };
+
+// Add interactive hover/focus styles dynamically
+const addStyles = () => {
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = `
+    button, input[type="date"], input[type="number"] {
+      transition: all 0.2s ease;
+    }
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(0.96);
+    }
+    input:focus, input[type="date"]:focus, input[type="number"]:focus {
+      border-color: #a5b4fc !important;
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+    div[style*="border-radius: 24px"]:hover {
+      border-color: #e2e8f0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+  `;
+  document.head.appendChild(styleSheet);
+};
+
+if (typeof document !== "undefined") {
+  addStyles();
+}

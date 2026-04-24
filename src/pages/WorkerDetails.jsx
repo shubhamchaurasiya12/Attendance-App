@@ -1,6 +1,9 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { getWorkers, getAttendance } from "../services/storage";
+import {
+  subscribeWorkers,
+  subscribeAttendance,
+} from "../services/storage";
 import {
   calculateWorkerSummary,
   calculateDailyEarning,
@@ -14,33 +17,68 @@ export default function WorkerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [worker, setWorker]   = useState(null);
+  const [workers, setWorkers] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+
+  const [worker, setWorker] = useState(null);
   const [records, setRecords] = useState([]);
   const [summary, setSummary] = useState(null);
 
+  // 🔥 REALTIME WORKERS
+  useEffect(() => {
+    const unsub = subscribeWorkers(setWorkers);
+    return () => unsub();
+  }, []);
+
+  // 🔥 REALTIME ATTENDANCE
+  useEffect(() => {
+    const unsub = subscribeAttendance(setAttendance);
+    return () => unsub();
+  }, []);
+
+  // 🔥 COMPUTE DATA
   useEffect(() => {
     if (!id) return;
-    const workers    = getWorkers();
-    const attendance = getAttendance();
-    const selected   = workers.find((w) => w.id === id);
-    if (!selected) { setWorker(null); return; }
+
+    const selected = workers.find((w) => w.id === id);
+
+    if (!selected) {
+      setWorker(null);
+      return;
+    }
 
     const workerRecords = attendance
       .filter((a) => a.workerId === id)
       .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-    const result = calculateWorkerSummary(id, attendance, selected.wagePer8h);
+    const result = calculateWorkerSummary(
+      id,
+      attendance,
+      selected.wagePer8h
+    );
 
     setWorker(selected);
     setRecords(workerRecords);
     setSummary(result);
-  }, [id]);
+  }, [id, workers, attendance]);
 
-  const handleShare       = () => { if (!worker || !summary) return; shareOnWhatsApp(formatWorkerSummary(worker, summary)); };
-  const handleDownloadPDF = () => { if (!worker || !summary) return; generateWorkerPDF(worker, summary, records); };
+  const handleShare = () => {
+    if (!worker || !summary) return;
+    shareOnWhatsApp(formatWorkerSummary(worker, summary));
+  };
+
+  const handleDownloadPDF = () => {
+    if (!worker || !summary) return;
+    generateWorkerPDF(worker, summary, records);
+  };
 
   const getInitials = (name) =>
-    name.trim().split(" ").map((n) => n[0]?.toUpperCase() ?? "").slice(0, 2).join("");
+    name
+      .trim()
+      .split(" ")
+      .map((n) => n[0]?.toUpperCase() ?? "")
+      .slice(0, 2)
+      .join("");
 
   const statusMeta = (status) => {
     if (status === ATTENDANCE_STATUS.FULL)
@@ -48,18 +86,19 @@ export default function WorkerDetails() {
     if (status === ATTENDANCE_STATUS.OVERTIME)
       return { label: "Overtime", color: "#3C3489", bg: "#EEEDFE", border: "#7F77DD" };
     if (status === ATTENDANCE_STATUS.ABSENT)
-      return { label: "Absent",   color: "#993C1D", bg: "#FAECE7", border: "#F0997B" };
+      return { label: "Absent", color: "#993C1D", bg: "#FAECE7", border: "#F0997B" };
     return { label: status, color: "#888", bg: "#f5f5f5", border: "#ddd" };
   };
 
-  // ── Not found ──────────────────────────────────────────
   if (!worker) {
     return (
       <div style={s.page}>
-        <div style={s.centeredEmpty}>
-          <div style={s.emptyIcon}>🔍</div>
-          <p style={s.emptyTitle}>Worker not found</p>
-          <button onClick={() => navigate("/")} style={s.backBtn}>Go back</button>
+        <div style={s.emptyState}>
+          <span style={s.emptyIcon}>👤</span>
+          <p style={s.emptyText}>Worker not found</p>
+          <button onClick={() => navigate("/")} style={s.backButton}>
+            ← Go back
+          </button>
         </div>
       </div>
     );
@@ -67,146 +106,88 @@ export default function WorkerDetails() {
 
   return (
     <div style={s.page}>
-
-      {/* ── STICKY HEADER ── */}
-      <div style={s.header}>
-        <button onClick={() => navigate(-1)} style={s.backIconBtn}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-            <path d="M15 19l-7-7 7-7" stroke="#534AB7" strokeWidth="2.2"
-              strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-
-        <div style={s.headerCenter}>
-          <div style={s.avatar}>{getInitials(worker.name)}</div>
-          <div style={{ minWidth: 0 }}>
-            <p style={s.workerName}>{worker.name}</p>
-            <p style={s.workerPhone}>{worker.phone || "No phone"}</p>
+      <div style={s.container}>
+        {/* Header with back button */}
+        <div style={s.header}>
+          <button onClick={() => navigate("/")} style={s.backButtonSmall}>
+            ← Back
+          </button>
+          <div style={s.workerInfo}>
+            <div style={s.avatar}>
+              {getInitials(worker.name)}
+            </div>
+            <div>
+              <h1 style={s.workerName}>{worker.name}</h1>
+              <p style={s.wageText}>₹{worker.wagePer8h} / day</p>
+            </div>
           </div>
         </div>
 
-        <div style={s.wagePill}>
-          ₹{Number(worker.wagePer8h).toLocaleString("en-IN")}
-          <span style={s.wageSub}>/8h</span>
-        </div>
-      </div>
-
-      {/* ── SCROLLABLE BODY ── */}
-      <div style={s.body}>
-
+        {/* Summary cards */}
         {summary && (
-          <>
-            {/* Metrics */}
-            <div style={s.metricsGrid}>
-              <div style={s.metricCard}>
-                <p style={s.metricLabel}>Full days</p>
-                <p style={{ ...s.metricValue, color: "#3B6D11" }}>{summary.fullDays}</p>
-              </div>
-              <div style={s.metricCard}>
-                <p style={s.metricLabel}>Overtime</p>
-                <p style={{ ...s.metricValue, color: "#3C3489" }}>{summary.overtimeDays}</p>
-              </div>
-              <div style={s.metricCard}>
-                <p style={s.metricLabel}>Absent</p>
-                <p style={{ ...s.metricValue, color: "#993C1D" }}>{summary.absentDays}</p>
-              </div>
+          <div style={s.summaryGrid}>
+            <div style={s.summaryCard}>
+              <span style={s.summaryLabel}>Total earned</span>
+              <span style={s.summaryValue}>₹{summary.totalEarned}</span>
             </div>
-
-            {/* Earnings */}
-            <div style={s.earningsCard}>
-              <div style={s.earningsRow}>
-                <div style={s.earningsItem}>
-                  <p style={s.earningsLabel}>Total earned</p>
-                  <p style={s.earningsValue}>
-                    ₹{Number(summary.totalEarned).toLocaleString("en-IN")}
-                  </p>
-                </div>
-                <div style={s.earningsDivider}/>
-                <div style={s.earningsItem}>
-                  <p style={s.earningsLabel}>Advance given</p>
-                  <p style={{ ...s.earningsValue, color: "#993C1D" }}>
-                    − ₹{Number(summary.totalAdvance).toLocaleString("en-IN")}
-                  </p>
-                </div>
-              </div>
-
-              <div style={s.remainingRow}>
-                <p style={s.remainingLabel}>Remaining to pay</p>
-                <p style={s.remainingValue}>
-                  ₹{Number(summary.remaining).toLocaleString("en-IN")}
-                </p>
-              </div>
+            <div style={s.summaryCard}>
+              <span style={s.summaryLabel}>Total advance</span>
+              <span style={s.summaryValue}>₹{summary.totalAdvance}</span>
             </div>
-
-            {/* Action buttons */}
-            <div style={s.actionRow}>
-              <button style={s.whatsappBtn} onClick={handleShare}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                  style={{ marginRight: "7px", flexShrink: 0 }}>
-                  <path fillRule="evenodd" clipRule="evenodd"
-                    d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.418A9.96 9.96 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"
-                    fill="#25D366"/>
-                  <path d="M8.5 8.5c.2-.5.7-1 1.2-1 .3 0 .5.1.7.5l.8 2c.1.3 0 .6-.2.8l-.5.5c.5 1 1.4 1.9 2.4 2.4l.5-.5c.2-.2.5-.3.8-.2l2 .8c.4.2.5.4.5.7 0 .5-.5 1-1 1.2-2.5 1-6-2.5-5-5z"
-                    fill="#fff"/>
-                </svg>
-                Share on WhatsApp
-              </button>
-
-              <button style={s.pdfBtn} onClick={handleDownloadPDF}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                  style={{ marginRight: "7px", flexShrink: 0 }}>
-                  <path d="M12 16l-4-4h2.5V4h3v8H16l-4 4z" fill="#534AB7"/>
-                  <path d="M4 18h16v2H4v-2z" fill="#534AB7"/>
-                </svg>
-                Download PDF
-              </button>
+            <div style={s.summaryCard}>
+              <span style={s.summaryLabel}>Remaining</span>
+              <span style={s.summaryValue}>₹{summary.remaining}</span>
             </div>
-          </>
+          </div>
         )}
 
-        {/* History */}
-        <div style={s.historySection}>
-          <p style={s.sectionTitle}>
-            Attendance history
-            {records.length > 0 && (
-              <span style={s.recordCount}>{records.length} records</span>
-            )}
-          </p>
+        {/* Action buttons */}
+        {summary && (
+          <div style={s.actionButtons}>
+            <button onClick={handleShare} style={s.secondaryBtn}>
+              📤 Share
+            </button>
+            <button onClick={handleDownloadPDF} style={s.secondaryBtn}>
+              📄 PDF
+            </button>
+          </div>
+        )}
 
+        {/* Attendance history */}
+        <div style={s.historySection}>
+          <h2 style={s.sectionTitle}>Attendance history</h2>
           {records.length === 0 ? (
-            <div style={s.emptyState}>
-              <div style={s.emptyIcon}>📋</div>
-              <p style={s.emptyTitle}>No records yet</p>
-              <p style={s.emptyHint}>Mark attendance from the Attendance tab</p>
+            <div style={s.emptyHistory}>
+              <p>No attendance records found.</p>
             </div>
           ) : (
-            <div style={s.recordList}>
+            <div style={s.recordsList}>
               {records.map((r) => {
-                const earning = calculateDailyEarning(r.status, worker.wagePer8h);
-                const meta    = statusMeta(r.status);
+                const earning = calculateDailyEarning(
+                  r.status,
+                  worker.wagePer8h
+                );
+                const meta = statusMeta(r.status);
 
                 return (
                   <div key={`${r.workerId}-${r.date}`} style={s.recordCard}>
                     <div style={s.recordLeft}>
-                      <p style={s.recordDate}>{formatDate(r.date)}</p>
-                      <span style={{
-                        ...s.statusPill,
-                        background: meta.bg,
-                        color:      meta.color,
-                        border:     `1px solid ${meta.border}`,
-                      }}>
+                      <strong style={s.recordDate}>{formatDate(r.date)}</strong>
+                      <span
+                        style={{
+                          ...s.statusPill,
+                          background: meta.bg,
+                          color: meta.color,
+                          borderColor: meta.border,
+                        }}
+                      >
                         {meta.label}
                       </span>
                     </div>
-
                     <div style={s.recordRight}>
-                      <p style={s.recordEarning}>
-                        ₹{Number(earning).toLocaleString("en-IN")}
-                      </p>
+                      <span style={s.earningText}>+₹{earning}</span>
                       {r.advance > 0 && (
-                        <p style={s.recordAdvance}>
-                          − ₹{Number(r.advance).toLocaleString("en-IN")} adv.
-                        </p>
+                        <span style={s.advanceText}>-₹{r.advance}</span>
                       )}
                     </div>
                   </div>
@@ -215,330 +196,228 @@ export default function WorkerDetails() {
             </div>
           )}
         </div>
-
-      </div>{/* end body */}
+      </div>
     </div>
   );
 }
 
+// 🎨 Minimal, clean styling matching the app's theme
 const s = {
-  // Fills App.jsx content div — same pattern as Workers + Attendance
   page: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    background: "#f4f3ff",
-    overflow: "hidden",
+    background: "#f8fafc",
+    minHeight: "100vh",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
-
-  // ── Sticky header
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    padding: "12px 16px",
-    background: "#ffffff",
-    borderBottom: "1px solid #eeecfd",
-    flexShrink: 0,              // never compressed
+  container: {
+    maxWidth: "720px",
+    margin: "0 auto",
+    padding: "32px 24px",
   },
-  backIconBtn: {
-    width: "36px",
-    height: "36px",
-    minWidth: "36px",
-    borderRadius: "50%",
-    border: "1.5px solid #e4e2f8",
-    background: "#faf9ff",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    padding: 0,
-    WebkitTapHighlightColor: "transparent",
-  },
-  headerCenter: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    flex: 1,
-    minWidth: 0,                // allows text truncation
-  },
-  avatar: {
-    width: "40px",
-    height: "40px",
-    minWidth: "40px",
-    borderRadius: "50%",
-    background: "#EEEDFE",
-    color: "#3C3489",
-    fontSize: "14px",
-    fontWeight: "700",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  workerName: {
-    fontSize: "15px",
-    fontWeight: "700",
-    color: "#1a1a2e",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  workerPhone: {
-    fontSize: "12px",
-    color: "#999",
-    marginTop: "2px",
-  },
-  wagePill: {
-    fontSize: "12px",
-    fontWeight: "700",
-    background: "#EAF3DE",
-    color: "#3B6D11",
-    padding: "4px 10px",
-    borderRadius: "20px",
-    flexShrink: 0,
-    display: "flex",
-    alignItems: "baseline",
-    gap: "2px",
-    whiteSpace: "nowrap",
-  },
-  wageSub: {
-    fontSize: "10px",
-    fontWeight: "500",
-    color: "#639922",
-  },
-
-  // ── Scrollable body — this is the ONLY thing that scrolls
-  body: {
-    flex: 1,
-    overflowY: "auto",
-    overflowX: "hidden",
-    WebkitOverflowScrolling: "touch",
-    padding: "0 0 16px 0",
-  },
-
-  // ── Metrics grid
-  metricsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "8px",
-    padding: "12px 12px 0",
-  },
-  metricCard: {
-    background: "#ffffff",
-    borderRadius: "12px",
-    border: "1px solid #eeecfd",
-    padding: "10px 8px",
+  emptyState: {
     textAlign: "center",
+    padding: "48px 24px",
+    background: "#fff",
+    borderRadius: "24px",
+    border: "1px solid #f1f5f9",
+    maxWidth: "400px",
+    margin: "80px auto",
   },
-  metricLabel: {
-    fontSize: "10px",
-    color: "#aaa",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    marginBottom: "5px",
+  emptyIcon: {
+    fontSize: "48px",
+    display: "block",
+    marginBottom: "16px",
+    opacity: 0.6,
   },
-  metricValue: {
-    fontSize: "24px",
-    fontWeight: "700",
-    lineHeight: 1,
+  emptyText: {
+    color: "#64748b",
+    marginBottom: "20px",
   },
-
-  // ── Earnings card
-  earningsCard: {
-    background: "#ffffff",
-    margin: "8px 12px 0",
-    borderRadius: "14px",
-    border: "1px solid #eeecfd",
-    padding: "14px",
-  },
-  earningsRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    marginBottom: "12px",
-  },
-  earningsItem: { flex: 1, textAlign: "center" },
-  earningsDivider: {
-    width: "1px",
-    height: "36px",
-    background: "#eeecfd",
-    flexShrink: 0,
-  },
-  earningsLabel: {
-    fontSize: "10px",
-    color: "#aaa",
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    marginBottom: "4px",
-  },
-  earningsValue: {
-    fontSize: "16px",
-    fontWeight: "700",
-    color: "#1a1a2e",
-  },
-  remainingRow: {
-    background: "#EEEDFE",
-    borderRadius: "10px",
-    padding: "10px 14px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  remainingLabel: {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: "#534AB7",
-  },
-  remainingValue: {
-    fontSize: "18px",
-    fontWeight: "700",
-    color: "#3C3489",
-  },
-
-  // ── Action buttons
-  actionRow: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    padding: "10px 12px 0",
-  },
-  whatsappBtn: {
-    width: "100%",
-    height: "48px",
-    background: "#25D366",
+  backButton: {
+    background: "#4f46e5",
     color: "#fff",
     border: "none",
-    borderRadius: "12px",
+    borderRadius: "40px",
+    padding: "8px 20px",
     fontSize: "14px",
-    fontWeight: "600",
     cursor: "pointer",
+    transition: "all 0.2s",
+  },
+  header: {
+    marginBottom: "32px",
+  },
+  backButtonSmall: {
+    background: "transparent",
+    border: "none",
+    fontSize: "14px",
+    color: "#4f46e5",
+    cursor: "pointer",
+    padding: "0 0 12px 0",
+    fontWeight: "500",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+  },
+  workerInfo: {
+    display: "flex",
+    alignItems: "center",
+    gap: "16px",
+  },
+  avatar: {
+    width: "64px",
+    height: "64px",
+    borderRadius: "32px",
+    background: "#e0e7ff",
+    color: "#4f46e5",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    WebkitTapHighlightColor: "transparent",
+    fontSize: "24px",
+    fontWeight: "600",
   },
-  pdfBtn: {
-    width: "100%",
-    height: "48px",
-    background: "#ffffff",
-    color: "#534AB7",
-    border: "1.5px solid #AFA9EC",
-    borderRadius: "12px",
+  workerName: {
+    fontSize: "28px",
+    fontWeight: "600",
+    color: "#0f172a",
+    margin: "0 0 6px 0",
+    letterSpacing: "-0.01em",
+  },
+  wageText: {
     fontSize: "14px",
-    fontWeight: "600",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    WebkitTapHighlightColor: "transparent",
+    color: "#475569",
+    margin: 0,
   },
-
-  // ── History section
-  historySection: {
-    padding: "14px 12px 0",
+  summaryGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+    gap: "16px",
+    marginBottom: "24px",
   },
-  sectionTitle: {
-    fontSize: "11px",
-    fontWeight: "700",
-    color: "#aaa",
-    textTransform: "uppercase",
-    letterSpacing: "0.06em",
-    marginBottom: "10px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  recordCount: {
-    fontSize: "11px",
-    fontWeight: "600",
-    background: "#EEEDFE",
-    color: "#534AB7",
-    padding: "2px 8px",
+  summaryCard: {
+    background: "#fff",
+    padding: "18px 16px",
     borderRadius: "20px",
-    textTransform: "none",
-    letterSpacing: 0,
-  },
-  recordList: {
+    border: "1px solid #f0f2f5",
     display: "flex",
     flexDirection: "column",
     gap: "8px",
   },
-  recordCard: {
-    background: "#ffffff",
-    borderRadius: "12px",
-    border: "1px solid #eeecfd",
-    padding: "11px 14px",
+  summaryLabel: {
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "#64748b",
+    letterSpacing: "0.3px",
+  },
+  summaryValue: {
+    fontSize: "26px",
+    fontWeight: "600",
+    color: "#0f172a",
+  },
+  actionButtons: {
     display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
     gap: "12px",
+    marginBottom: "40px",
+  },
+  secondaryBtn: {
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: "40px",
+    padding: "8px 20px",
+    fontSize: "14px",
+    fontWeight: "500",
+    color: "#334155",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+  },
+  historySection: {
+    marginTop: "8px",
+  },
+  sectionTitle: {
+    fontSize: "20px",
+    fontWeight: "500",
+    color: "#0f172a",
+    margin: "0 0 20px 0",
+  },
+  emptyHistory: {
+    background: "#fff",
+    borderRadius: "20px",
+    padding: "32px",
+    textAlign: "center",
+    color: "#64748b",
+    border: "1px solid #f0f2f5",
+  },
+  recordsList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  recordCard: {
+    background: "#fff",
+    borderRadius: "20px",
+    padding: "16px 20px",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    border: "1px solid #f0f2f5",
+    transition: "all 0.2s",
   },
   recordLeft: {
     display: "flex",
     flexDirection: "column",
-    gap: "5px",
+    gap: "6px",
   },
   recordDate: {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: "#1a1a2e",
+    fontSize: "15px",
+    fontWeight: "500",
+    color: "#0f172a",
   },
   statusPill: {
-    display: "inline-block",
-    fontSize: "11px",
-    fontWeight: "600",
-    padding: "2px 8px",
-    borderRadius: "20px",
-    alignSelf: "flex-start",
+    fontSize: "12px",
+    fontWeight: "500",
+    padding: "4px 10px",
+    borderRadius: "30px",
+    border: "1px solid",
+    width: "fit-content",
   },
   recordRight: {
-    textAlign: "right",
-    flexShrink: 0,
-  },
-  recordEarning: {
-    fontSize: "14px",
-    fontWeight: "700",
-    color: "#1a1a2e",
-  },
-  recordAdvance: {
-    fontSize: "11px",
-    color: "#993C1D",
-    marginTop: "3px",
-    fontWeight: "500",
-  },
-
-  // ── Empty states
-  centeredEmpty: {
-    flex: 1,
     display: "flex",
     flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "40px 20px",
-    textAlign: "center",
+    alignItems: "flex-end",
+    gap: "4px",
   },
-  emptyState: {
-    padding: "30px 20px",
-    background: "#ffffff",
-    border: "2px dashed #d6d3f5",
-    borderRadius: "16px",
-    textAlign: "center",
-  },
-  emptyIcon:  { fontSize: "34px", marginBottom: "10px" },
-  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#555" },
-  emptyHint:  { fontSize: "12px", color: "#aaa", marginTop: "5px" },
-  backBtn: {
-    marginTop: "14px",
-    height: "40px",
-    padding: "0 20px",
-    background: "#534AB7",
-    color: "#fff",
-    border: "none",
-    borderRadius: "10px",
-    fontSize: "14px",
+  earningText: {
+    fontSize: "16px",
     fontWeight: "600",
-    cursor: "pointer",
+    color: "#15803d",
+  },
+  advanceText: {
+    fontSize: "13px",
+    color: "#b91c1c",
   },
 };
+
+// Add hover/focus interactions dynamically
+const addStyles = () => {
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = `
+    button, .record-card {
+      transition: all 0.2s ease;
+    }
+    button:hover:not(:disabled) {
+      transform: translateY(-1px);
+      filter: brightness(0.96);
+    }
+    .record-card:hover {
+      border-color: #e2e8f0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+  `;
+  document.head.appendChild(styleSheet);
+};
+
+if (typeof document !== "undefined") {
+  addStyles();
+}

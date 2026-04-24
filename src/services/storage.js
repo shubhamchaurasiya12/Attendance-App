@@ -1,163 +1,103 @@
 // src/services/storage.js
 
-// ==============================
-// STORAGE KEYS
-// ==============================
-const KEYS = {
-  WORKERS: "workers",
-  ATTENDANCE: "attendance",
-};
+import { db } from "./firebase";
+import {
+  collection,
+  doc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  where,
+} from "firebase/firestore";
 
 // ==============================
-// SAFE PARSE (prevents crashes)
+// COLLECTIONS
 // ==============================
-const safeParse = (value) => {
-  try {
-    return JSON.parse(value);
-  } catch (error) {
-    console.error("Storage parse error:", error);
-    return null;
-  }
-};
-
-// ==============================
-// GENERIC GET
-// ==============================
-const get = (key) => {
-  const data = localStorage.getItem(key);
-
-  if (!data) return [];
-
-  const parsed = safeParse(data);
-
-  return Array.isArray(parsed) ? parsed : [];
-};
-
-// ==============================
-// GENERIC SET
-// ==============================
-const set = (key, value) => {
-  localStorage.setItem(key, JSON.stringify(value));
-};
+const WORKERS = "workers";
+const ATTENDANCE = "attendance";
 
 // ==============================
 // WORKERS API
 // ==============================
 
-// Normalize worker (important for old data)
-const normalizeWorker = (worker) => ({
-  ...worker,
-  isActive: worker.isActive !== false, // default true
-  archivedAt: worker.archivedAt || null,
-});
-
-export const getWorkers = () => {
-  const workers = get(KEYS.WORKERS);
-  return workers.map(normalizeWorker);
+// Get all workers
+export const getWorkers = async () => {
+  const snapshot = await getDocs(collection(db, WORKERS));
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
 };
 
-export const saveWorkers = (workers) => {
-  set(KEYS.WORKERS, workers);
+// Real-time workers listener
+export const subscribeWorkers = (callback) => {
+  return onSnapshot(collection(db, WORKERS), (snapshot) => {
+    const data = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+    callback(data);
+  });
 };
 
 // Add worker
-export const addWorker = (worker) => {
-  const workers = getWorkers();
-
-  const newWorker = normalizeWorker({
-    ...worker,
-    isActive: true,
-    archivedAt: null,
-  });
-
-  const updated = [...workers, newWorker];
-
-  saveWorkers(updated);
-  return updated;
+export const addWorker = async (worker) => {
+  await setDoc(doc(db, WORKERS, worker.id), worker);
 };
 
 // Update worker
-export const updateWorker = (updatedWorker) => {
-  const workers = getWorkers();
-
-  const updated = workers.map((w) =>
-    w.id === updatedWorker.id
-      ? normalizeWorker(updatedWorker)
-      : w
-  );
-
-  saveWorkers(updated);
-  return updated;
+export const updateWorker = async (worker) => {
+  await updateDoc(doc(db, WORKERS, worker.id), worker);
 };
 
-// Archive / Restore worker (NEW)
-export const toggleWorkerStatus = (workerId) => {
-  const workers = getWorkers();
-
-  const updated = workers.map((w) => {
-    if (w.id !== workerId) return w;
-
-    return {
-      ...w,
-      isActive: !w.isActive,
-      archivedAt: w.isActive ? Date.now() : null,
-    };
+// Archive / Restore worker
+export const toggleWorkerStatus = async (workerId, currentStatus) => {
+  await updateDoc(doc(db, WORKERS, workerId), {
+    isActive: !currentStatus,
+    archivedAt: currentStatus ? Date.now() : null,
   });
-
-  saveWorkers(updated);
-  return updated;
 };
 
-// Delete worker (rarely used now)
-export const deleteWorker = (workerId) => {
-  const workers = getWorkers();
-
-  const updated = workers.filter((w) => w.id !== workerId);
-
-  saveWorkers(updated);
-  return updated;
+// Delete worker
+export const deleteWorker = async (workerId) => {
+  await deleteDoc(doc(db, WORKERS, workerId));
 };
 
 // ==============================
 // ATTENDANCE API
 // ==============================
 
-export const getAttendance = () => {
-  return get(KEYS.ATTENDANCE);
+// Get all attendance
+export const getAttendance = async () => {
+  const snapshot = await getDocs(collection(db, ATTENDANCE));
+  return snapshot.docs.map((doc) => doc.data());
 };
 
-export const saveAttendance = (attendance) => {
-  set(KEYS.ATTENDANCE, attendance);
+// Real-time attendance listener
+export const subscribeAttendance = (callback) => {
+  return onSnapshot(collection(db, ATTENDANCE), (snapshot) => {
+    const data = snapshot.docs.map((doc) => doc.data());
+    callback(data);
+  });
 };
 
-// Save or override attendance
-export const upsertAttendance = (entry) => {
-  const attendance = getAttendance();
+// Save / override attendance
+export const upsertAttendance = async (entry) => {
+  const id = `${entry.workerId}_${entry.date}`;
+  await setDoc(doc(db, ATTENDANCE, id), entry);
+};
 
-  const filtered = attendance.filter(
-    (a) =>
-      !(
-        a.workerId === entry.workerId &&
-        a.date === entry.date
-      )
+// Get attendance by worker
+export const getAttendanceByWorker = async (workerId) => {
+  const q = query(
+    collection(db, ATTENDANCE),
+    where("workerId", "==", workerId)
   );
 
-  const updated = [...filtered, entry];
+  const snapshot = await getDocs(q);
 
-  saveAttendance(updated);
-  return updated;
-};
-
-// Get attendance for one worker
-export const getAttendanceByWorker = (workerId) => {
-  const attendance = getAttendance();
-  return attendance.filter((a) => a.workerId === workerId);
-};
-
-// ==============================
-// UTILITY (CLEAR ALL - DEV ONLY)
-// ==============================
-export const clearAllData = () => {
-  localStorage.removeItem(KEYS.WORKERS);
-  localStorage.removeItem(KEYS.ATTENDANCE);
+  return snapshot.docs.map((doc) => doc.data());
 };

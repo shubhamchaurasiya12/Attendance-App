@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { useNavigate } from "react-router-dom";
 import {
-  getWorkers,
+  subscribeWorkers,
   addWorker,
   updateWorker,
   toggleWorkerStatus,
@@ -13,12 +13,20 @@ export default function Workers() {
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ id: null, name: "", phone: "", wagePer8h: "" });
+  const [form, setForm] = useState({
+    id: null,
+    name: "",
+    phone: "",
+    wagePer8h: "",
+  });
   const [isEditing, setIsEditing] = useState(false);
+
   const navigate = useNavigate();
 
+  // 🔥 REALTIME LISTENER
   useEffect(() => {
-    setWorkers(getWorkers());
+    const unsubscribe = subscribeWorkers(setWorkers);
+    return () => unsubscribe();
   }, []);
 
   const handleChange = (e) => {
@@ -32,25 +40,34 @@ export default function Workers() {
     setShowForm(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!form.name.trim()) return alert("Name is required");
-    if (!form.wagePer8h || Number(form.wagePer8h) <= 0) return alert("Enter valid wage");
+    if (!form.wagePer8h || Number(form.wagePer8h) <= 0)
+      return alert("Enter valid wage");
 
-    if (isEditing) {
-      const updated = updateWorker({ ...form, wagePer8h: Number(form.wagePer8h) });
-      setWorkers(updated);
-    } else {
-      const updated = addWorker({
-        ...form,
-        id: uuidv4(),
-        wagePer8h: Number(form.wagePer8h),
-        createdAt: Date.now(),
-        isActive: true,
-        archivedAt: null,
-      });
-      setWorkers(updated);
+    try {
+      if (isEditing) {
+        await updateWorker({
+          ...form,
+          wagePer8h: Number(form.wagePer8h),
+        });
+      } else {
+        await addWorker({
+          ...form,
+          id: uuidv4(),
+          wagePer8h: Number(form.wagePer8h),
+          createdAt: Date.now(),
+          isActive: true,
+          archivedAt: null,
+        });
+      }
+
+      // 🔥 NO setWorkers here — realtime handles it
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      alert("Operation failed");
     }
-    resetForm();
   };
 
   const handleEdit = (worker) => {
@@ -59,302 +76,225 @@ export default function Workers() {
     setShowForm(true);
   };
 
-  const handleArchive = (workerId) => {
-    const updated = toggleWorkerStatus(workerId);
-    setWorkers(updated);
+  const handleArchive = async (worker) => {
+    try {
+      await toggleWorkerStatus(worker.id, worker.isActive);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to update status");
+    }
   };
 
   const goToDetails = (id) => navigate(`/worker/${id}`);
 
   const getInitials = (name) =>
-    name.trim().split(" ").map((n) => n[0]?.toUpperCase() ?? "").slice(0, 2).join("");
+    name
+      .trim()
+      .split(" ")
+      .map((n) => n[0]?.toUpperCase() ?? "")
+      .slice(0, 2)
+      .join("");
 
   const filteredWorkers = workers
     .filter((w) => w.name.toLowerCase().includes(search.toLowerCase()))
     .filter((w) => (showArchived ? !w.isActive : w.isActive));
 
-  const activeCount   = workers.filter((w) => w.isActive).length;
+  const activeCount = workers.filter((w) => w.isActive).length;
   const archivedCount = workers.filter((w) => !w.isActive).length;
 
   return (
     <div style={s.page}>
-
-      {/* ── STICKY HEADER ── */}
-      <div style={s.header}>
-        <div>
-          <h2 style={s.heading}>Workers</h2>
-          <p style={s.subHeading}>
-            {activeCount} active · {archivedCount} archived
-          </p>
+      <div style={s.container}>
+        {/* HEADER SECTION */}
+        <div style={s.header}>
+          <div>
+            <h1 style={s.heading}>Workers</h1>
+            <p style={s.subHeading}>
+              {activeCount} active · {archivedCount} archived
+            </p>
+          </div>
+          <div style={s.headerRight}>
+            <span style={s.countBadge}>{activeCount}</span>
+            <button
+              onClick={() => {
+                if (isEditing) resetForm();
+                else setShowForm((p) => !p);
+              }}
+              style={{
+                ...s.addBtn,
+                background: showForm ? "#eef2ff" : "#4f46e5",
+                color: showForm ? "#4f46e5" : "#fff",
+                border: showForm ? "1px solid #c7d2fe" : "none",
+              }}
+            >
+              {showForm ? "Cancel" : "+ Add Worker"}
+            </button>
+          </div>
         </div>
 
-        <div style={s.headerRight}>
-          <span style={s.countBadge}>{activeCount}</span>
-          {/* Add button — toggles form open/close */}
-          <button
-            onClick={() => {
-              if (isEditing) { resetForm(); } else { setShowForm((p) => !p); }
-            }}
-            style={{
-              ...s.addBtn,
-              background: showForm ? "#FAECE7" : "#534AB7",
-              color:      showForm ? "#993C1D"  : "#fff",
-              border:     showForm ? "1.5px solid #F0997B" : "none",
-            }}
-          >
-            {showForm ? "✕" : "+ Add"}
-          </button>
-        </div>
-      </div>
-
-      {/* ── SCROLLABLE BODY ── */}
-      <div style={s.body}>
-
-        {/* Search + toggle */}
-        <div style={s.searchRow}>
-          <div style={s.searchWrap}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={s.searchIcon}>
-              <circle cx="11" cy="11" r="7" stroke="#aaa" strokeWidth="2"/>
-              <path d="M16.5 16.5L21 21" stroke="#aaa" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+        {/* SEARCH & FILTER BAR */}
+        <div style={s.controlsBar}>
+          <div style={s.searchWrapper}>
+            <span style={s.searchIcon}>🔍</span>
             <input
-              placeholder="Search worker..."
+              placeholder="Search by name..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               style={s.searchInput}
             />
-            {search.length > 0 && (
-              <button onClick={() => setSearch("")} style={s.clearBtn}>✕</button>
-            )}
           </div>
-
-          <button
-            onClick={() => setShowArchived(!showArchived)}
-            style={{
-              ...s.toggleBtn,
-              background: showArchived ? "#FAEEDA" : "#EEEDFE",
-              color:      showArchived ? "#633806"  : "#3C3489",
-              border:     `1.5px solid ${showArchived ? "#FAC775" : "#AFA9EC"}`,
-            }}
-          >
-            {showArchived ? "Active" : "Archived"}
+          <button onClick={() => setShowArchived(!showArchived)} style={s.toggleBtn}>
+            {showArchived ? "← Show Active" : "Show Archived →"}
           </button>
         </div>
 
-        {/* Form — collapsible */}
+        {/* FORM CARD (Add/Edit) */}
         {showForm && (
           <div style={s.formCard}>
-            <p style={s.formLabel}>
-              {isEditing ? "✏️  Editing worker" : "➕  New worker"}
-            </p>
-
-            <div style={s.field}>
-              <label style={s.label}>Full name *</label>
+            <h3 style={s.formTitle}>{isEditing ? "Edit Worker" : "New Worker"}</h3>
+            <div style={s.formGroup}>
               <input
                 name="name"
-                placeholder="e.g. Ramesh Kumar"
+                placeholder="Full name"
                 value={form.name}
                 onChange={handleChange}
                 style={s.input}
               />
-            </div>
-
-            <div style={s.field}>
-              <label style={s.label}>Mobile number</label>
               <input
                 name="phone"
-                placeholder="e.g. 9876543210"
-                type="tel"
-                inputMode="numeric"
+                placeholder="Phone number"
                 value={form.phone}
                 onChange={handleChange}
                 style={s.input}
               />
-            </div>
-
-            <div style={s.field}>
-              <label style={s.label}>Wage per 8 hours (₹) *</label>
               <input
                 name="wagePer8h"
-                placeholder="e.g. 600"
                 type="number"
-                inputMode="numeric"
+                placeholder="Daily wage (₹)"
                 value={form.wagePer8h}
                 onChange={handleChange}
                 style={s.input}
               />
             </div>
-
-            <button onClick={handleSubmit} style={s.btnPrimary}>
-              {isEditing ? "Update Worker" : "Add Worker"}
-            </button>
-
-            {isEditing && (
-              <button onClick={resetForm} style={s.btnCancel}>Cancel</button>
-            )}
+            <div style={s.formActions}>
+              <button onClick={handleSubmit} style={s.btnPrimary}>
+                {isEditing ? "Update Worker" : "Add Worker"}
+              </button>
+              {isEditing && (
+                <button onClick={resetForm} style={s.btnCancel}>
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Worker list */}
-        {filteredWorkers.length === 0 ? (
-          <div style={s.emptyState}>
-            <div style={s.emptyIcon}>
-              {search ? "🔍" : showArchived ? "📦" : "👷"}
+        {/* WORKERS LIST */}
+        <div style={s.listContainer}>
+          {filteredWorkers.length === 0 ? (
+            <div style={s.emptyState}>
+              <span style={s.emptyIcon}>👷</span>
+              <p>No workers found</p>
+              <button onClick={() => setShowForm(true)} style={s.emptyBtn}>
+                Add your first worker
+              </button>
             </div>
-            <p style={s.emptyTitle}>
-              {search
-                ? `No results for "${search}"`
-                : showArchived
-                ? "No archived workers"
-                : "No workers yet"}
-            </p>
-            <p style={s.emptyHint}>
-              {search
-                ? "Try a different name"
-                : showArchived
-                ? "Archive a worker from the active list"
-                : 'Tap "+ Add" above to add your first worker'}
-            </p>
-          </div>
-        ) : (
-          <div style={s.list}>
-            <p style={s.sectionLabel}>
-              {showArchived ? "Archived" : "Active"} · {filteredWorkers.length} shown
-            </p>
-
-            {filteredWorkers.map((w) => (
+          ) : (
+            filteredWorkers.map((w) => (
               <div
                 key={w.id}
-                style={{ ...s.card, ...(w.isActive ? {} : s.archivedCard) }}
+                style={s.card}
                 onClick={() => goToDetails(w.id)}
               >
-                <div style={s.cardLeft}>
-                  <div style={{
-                    ...s.avatar,
-                    background: w.isActive ? "#EEEDFE" : "#e8e8e8",
-                    color:      w.isActive ? "#3C3489"  : "#777",
-                  }}>
-                    {getInitials(w.name)}
+                <div style={s.cardInfo}>
+                  <div>
+                    <strong style={s.workerName}>{w.name}</strong>
+                    {!w.isActive && (
+                      <span style={s.archivedBadge}>Archived</span>
+                    )}
                   </div>
-
-                  <div style={s.info}>
-                    <div style={s.nameRow}>
-                      <p style={s.workerName}>{w.name}</p>
-                      {!w.isActive && (
-                        <span style={s.archivedBadge}>Archived</span>
-                      )}
-                    </div>
-                    <p style={s.workerPhone}>{w.phone || "No phone"}</p>
-                    <span style={{
-                      ...s.wageBadge,
-                      background: w.isActive ? "#EAF3DE" : "#efefef",
-                      color:      w.isActive ? "#3B6D11"  : "#888",
-                    }}>
-                      ₹{Number(w.wagePer8h).toLocaleString("en-IN")} / 8h
-                    </span>
-                  </div>
+                  <p style={s.wageText}>₹{w.wagePer8h} / day</p>
+                  {w.phone && <p style={s.phoneText}>{w.phone}</p>}
                 </div>
-
-                <div style={s.actions} onClick={(e) => e.stopPropagation()}>
-                  {w.isActive && (
-                    <button style={s.btnEdit} onClick={() => handleEdit(w)}>
-                      Edit
-                    </button>
-                  )}
-                  <button
-                    style={w.isActive ? s.btnArchive : s.btnRestore}
-                    onClick={() => handleArchive(w.id)}
-                  >
+                <div style={s.cardActions} onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => handleEdit(w)} style={s.editBtn}>
+                    Edit
+                  </button>
+                  <button onClick={() => handleArchive(w)} style={s.archiveBtn}>
                     {w.isActive ? "Archive" : "Restore"}
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-      </div>{/* end body */}
+            ))
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
+// 🎨 Minimal, clean, modern styling
 const s = {
-  // Fills App.jsx content div exactly — no minHeight or paddingBottom
   page: {
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    background: "#f4f3ff",
-    overflow: "hidden",
+    background: "#f8fafc",
+    minHeight: "100vh",
+    fontFamily:
+      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
-
-  // ── Sticky header
+  container: {
+    maxWidth: "880px",
+    margin: "0 auto",
+    padding: "32px 24px",
+  },
   header: {
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    padding: "16px 16px 12px",
-    background: "#ffffff",
-    borderBottom: "1px solid #eeecfd",
-    flexShrink: 0,
+    alignItems: "flex-start",
+    marginBottom: "32px",
+    flexWrap: "wrap",
+    gap: "16px",
   },
   heading: {
-    fontSize: "20px",
-    fontWeight: "700",
-    color: "#1a1a2e",
-    lineHeight: 1.2,
+    fontSize: "28px",
+    fontWeight: "600",
+    color: "#0f172a",
+    letterSpacing: "-0.01em",
+    margin: "0 0 6px 0",
   },
   subHeading: {
-    fontSize: "12px",
-    color: "#888",
-    marginTop: "2px",
+    fontSize: "14px",
+    color: "#475569",
+    margin: 0,
   },
   headerRight: {
     display: "flex",
     alignItems: "center",
-    gap: "8px",
+    gap: "12px",
   },
   countBadge: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    background: "#534AB7",
-    color: "#fff",
+    background: "#e2e8f0",
+    color: "#1e293b",
     fontSize: "14px",
-    fontWeight: "700",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
+    fontWeight: "500",
+    padding: "4px 10px",
+    borderRadius: "40px",
   },
   addBtn: {
-    height: "36px",
-    padding: "0 14px",
-    borderRadius: "20px",
-    fontSize: "13px",
-    fontWeight: "600",
+    border: "none",
+    borderRadius: "40px",
+    padding: "8px 20px",
+    fontSize: "14px",
+    fontWeight: "500",
     cursor: "pointer",
-    flexShrink: 0,
-    WebkitTapHighlightColor: "transparent",
+    transition: "all 0.2s ease",
   },
-
-  // ── Scrollable body
-  body: {
-    flex: 1,
-    overflowY: "auto",
-    overflowX: "hidden",
-    WebkitOverflowScrolling: "touch",
-    padding: "0 0 12px 0",
-  },
-
-  // ── Search row
-  searchRow: {
+  controlsBar: {
     display: "flex",
-    gap: "8px",
-    alignItems: "center",
-    padding: "10px 12px 0",
+    gap: "16px",
+    marginBottom: "32px",
+    flexWrap: "wrap",
   },
-  searchWrap: {
+  searchWrapper: {
     flex: 1,
     position: "relative",
     display: "flex",
@@ -362,244 +302,213 @@ const s = {
   },
   searchIcon: {
     position: "absolute",
-    left: "12px",
-    pointerEvents: "none",
+    left: "14px",
+    fontSize: "14px",
+    opacity: 0.6,
   },
   searchInput: {
     width: "100%",
-    height: "42px",
-    padding: "0 34px 0 34px",
-    border: "1.5px solid #e4e2f8",
-    borderRadius: "12px",
+    padding: "12px 16px 12px 38px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "48px",
     fontSize: "14px",
-    color: "#1a1a2e",
-    background: "#ffffff",
+    background: "#fff",
     outline: "none",
-    boxSizing: "border-box",
-    WebkitAppearance: "none",
-  },
-  clearBtn: {
-    position: "absolute",
-    right: "10px",
-    background: "none",
-    border: "none",
-    color: "#aaa",
-    fontSize: "13px",
-    cursor: "pointer",
-    padding: "4px",
+    transition: "all 0.2s",
+    fontFamily: "inherit",
   },
   toggleBtn: {
-    height: "42px",
-    padding: "0 12px",
-    borderRadius: "12px",
-    fontSize: "13px",
-    fontWeight: "600",
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: "40px",
+    padding: "0 20px",
+    fontSize: "14px",
+    fontWeight: "500",
+    color: "#334155",
     cursor: "pointer",
-    flexShrink: 0,
-    WebkitTapHighlightColor: "transparent",
+    whiteSpace: "nowrap",
+    transition: "all 0.2s",
   },
-
-  // ── Form card
   formCard: {
-    background: "#ffffff",
-    margin: "10px 12px 0",
-    borderRadius: "16px",
-    padding: "16px",
-    border: "1px solid #eeecfd",
+    background: "#fff",
+    borderRadius: "24px",
+    padding: "24px",
+    marginBottom: "32px",
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.03), 0 1px 2px rgba(0, 0, 0, 0.05)",
+    border: "1px solid #f1f5f9",
   },
-  formLabel: {
-    fontSize: "13px",
-    fontWeight: "600",
-    color: "#534AB7",
-    marginBottom: "12px",
+  formTitle: {
+    fontSize: "18px",
+    fontWeight: "500",
+    margin: "0 0 20px 0",
+    color: "#0f172a",
   },
-  field: { marginBottom: "10px" },
-  label: {
-    display: "block",
-    fontSize: "12px",
-    fontWeight: "600",
-    color: "#555",
-    marginBottom: "5px",
+  formGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    marginBottom: "24px",
   },
   input: {
     width: "100%",
-    height: "46px",
-    padding: "0 14px",
-    border: "1.5px solid #e4e2f8",
-    borderRadius: "10px",
-    fontSize: "15px",
-    color: "#1a1a2e",
-    background: "#faf9ff",
+    padding: "12px 16px",
+    border: "1px solid #e2e8f0",
+    borderRadius: "16px",
+    fontSize: "14px",
+    fontFamily: "inherit",
     outline: "none",
-    boxSizing: "border-box",
-    WebkitAppearance: "none",
+    transition: "all 0.2s",
+    background: "#fefefe",
+  },
+  formActions: {
+    display: "flex",
+    gap: "12px",
+    alignItems: "center",
   },
   btnPrimary: {
-    width: "100%",
-    height: "48px",
-    marginTop: "4px",
-    background: "#534AB7",
+    background: "#4f46e5",
     color: "#fff",
     border: "none",
-    borderRadius: "12px",
-    fontSize: "15px",
-    fontWeight: "600",
+    borderRadius: "40px",
+    padding: "10px 24px",
+    fontSize: "14px",
+    fontWeight: "500",
     cursor: "pointer",
-    WebkitTapHighlightColor: "transparent",
+    transition: "all 0.2s",
   },
   btnCancel: {
-    width: "100%",
-    height: "44px",
-    marginTop: "8px",
-    background: "transparent",
-    color: "#888",
-    border: "1.5px solid #e0e0e0",
-    borderRadius: "12px",
+    background: "#f1f5f9",
+    border: "none",
+    borderRadius: "40px",
+    padding: "10px 24px",
     fontSize: "14px",
+    fontWeight: "500",
+    color: "#334155",
     cursor: "pointer",
   },
-
-  // ── List
-  list: {
-    padding: "10px 12px 0",
+  listContainer: {
     display: "flex",
     flexDirection: "column",
+    gap: "12px",
   },
-  sectionLabel: {
-    fontSize: "11px",
-    fontWeight: "700",
-    color: "#aaa",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    marginBottom: "8px",
-  },
-
-  // ── Empty state
-  emptyState: {
-    margin: "12px",
-    padding: "36px 20px",
-    background: "#ffffff",
-    border: "2px dashed #d6d3f5",
-    borderRadius: "16px",
-    textAlign: "center",
-  },
-  emptyIcon:  { fontSize: "36px", marginBottom: "10px" },
-  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#444" },
-  emptyHint:  { fontSize: "13px", color: "#aaa", marginTop: "6px", lineHeight: 1.5 },
-
-  // ── Worker card
   card: {
-    background: "#ffffff",
-    borderRadius: "14px",
-    border: "1.5px solid #eeecfd",
-    padding: "12px 14px",
+    background: "#fff",
+    borderRadius: "20px",
+    padding: "20px",
     display: "flex",
-    alignItems: "center",
     justifyContent: "space-between",
-    gap: "12px",
+    alignItems: "center",
+    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.03), 0 1px 1px rgba(0, 0, 0, 0.02)",
+    border: "1px solid #f0f2f5",
     cursor: "pointer",
-    marginBottom: "8px",
-    WebkitTapHighlightColor: "transparent",
+    transition: "all 0.2s",
   },
-  archivedCard: {
-    background: "#f8f8f8",
-    borderColor: "#e8e8e8",
-    opacity: 0.75,
-  },
-  cardLeft: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    flex: 1,
-    minWidth: 0,
-  },
-  avatar: {
-    width: "42px",
-    height: "42px",
-    minWidth: "42px",
-    borderRadius: "50%",
-    fontSize: "14px",
-    fontWeight: "700",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  info:    { flex: 1, minWidth: 0 },
-  nameRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "7px",
-    marginBottom: "3px",
-  },
-  workerName: {
-    fontSize: "14px",
-    fontWeight: "600",
-    color: "#1a1a2e",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  archivedBadge: {
-    fontSize: "10px",
-    fontWeight: "700",
-    background: "#FAEEDA",
-    color: "#854F0B",
-    border: "1px solid #FAC775",
-    padding: "2px 7px",
-    borderRadius: "20px",
-    flexShrink: 0,
-  },
-  workerPhone: {
-    fontSize: "12px",
-    color: "#999",
-    marginBottom: "5px",
-  },
-  wageBadge: {
-    display: "inline-block",
-    fontSize: "12px",
-    fontWeight: "600",
-    padding: "3px 10px",
-    borderRadius: "20px",
-  },
-
-  // ── Card actions
-  actions: {
+  cardInfo: {
     display: "flex",
     flexDirection: "column",
     gap: "6px",
-    flexShrink: 0,
   },
-  btnEdit: {
-    width: "68px",
-    height: "32px",
-    borderRadius: "8px",
-    fontSize: "12px",
+  workerName: {
+    fontSize: "16px",
     fontWeight: "600",
-    cursor: "pointer",
-    border: "1.5px solid #d6d3f5",
-    background: "#f0effe",
-    color: "#534AB7",
+    color: "#0f172a",
+    marginRight: "10px",
   },
-  btnArchive: {
-    width: "68px",
-    height: "32px",
-    borderRadius: "8px",
+  archivedBadge: {
+    background: "#fef9c3",
+    color: "#854d0e",
     fontSize: "12px",
-    fontWeight: "600",
-    cursor: "pointer",
-    border: "1.5px solid #FAC775",
-    background: "#FAEEDA",
-    color: "#854F0B",
+    fontWeight: "500",
+    padding: "2px 8px",
+    borderRadius: "30px",
+    marginLeft: "8px",
   },
-  btnRestore: {
-    width: "68px",
-    height: "32px",
-    borderRadius: "8px",
-    fontSize: "12px",
-    fontWeight: "600",
+  wageText: {
+    fontSize: "14px",
+    fontWeight: "500",
+    color: "#334155",
+    margin: 0,
+  },
+  phoneText: {
+    fontSize: "13px",
+    color: "#64748b",
+    margin: 0,
+  },
+  cardActions: {
+    display: "flex",
+    gap: "8px",
+  },
+  editBtn: {
+    background: "transparent",
+    border: "1px solid #e2e8f0",
+    borderRadius: "32px",
+    padding: "6px 14px",
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "#475569",
     cursor: "pointer",
-    border: "1.5px solid #97C459",
-    background: "#EAF3DE",
-    color: "#3B6D11",
+    transition: "all 0.2s",
+  },
+  archiveBtn: {
+    background: "transparent",
+    border: "1px solid #e2e8f0",
+    borderRadius: "32px",
+    padding: "6px 14px",
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "#475569",
+    cursor: "pointer",
+  },
+  emptyState: {
+    textAlign: "center",
+    padding: "48px 24px",
+    background: "#fff",
+    borderRadius: "24px",
+    border: "1px solid #f1f5f9",
+    color: "#64748b",
+  },
+  emptyIcon: {
+    fontSize: "48px",
+    display: "block",
+    marginBottom: "16px",
+    opacity: 0.7,
+  },
+  emptyBtn: {
+    background: "#4f46e5",
+    color: "#fff",
+    border: "none",
+    borderRadius: "40px",
+    padding: "8px 20px",
+    marginTop: "16px",
+    cursor: "pointer",
+    fontSize: "14px",
   },
 };
+
+// Add subtle hover interactions (inline hover simulation)
+const addHoverStyles = () => {
+  const styleSheet = document.createElement("style");
+  styleSheet.textContent = `
+    button, [style*="cursor: pointer"] {
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      transform: translateY(-1px);
+      filter: brightness(0.96);
+    }
+    div[style*="border-radius: 20px"]:hover {
+      border-color: #e2e8f0;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+    }
+    input:focus {
+      border-color: #c7d2fe !important;
+      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+    }
+  `;
+  document.head.appendChild(styleSheet);
+};
+
+// Call once to add hover/focus enhancements
+if (typeof document !== "undefined") {
+  addHoverStyles();
+}
