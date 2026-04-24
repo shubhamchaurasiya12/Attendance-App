@@ -109,15 +109,16 @@ export default function Attendance() {
   };
 
   const statusOptions = [
-    { key: ATTENDANCE_STATUS.ABSENT,   label: "Absent",  activeStyle: s.btnAbsentActive },
-    { key: ATTENDANCE_STATUS.FULL,     label: "8 hrs",   activeStyle: s.btnFullActive   },
-    { key: ATTENDANCE_STATUS.OVERTIME, label: "12 hrs",  activeStyle: s.btnOTActive     },
+    { key: ATTENDANCE_STATUS.ABSENT,   label: "Absent", activeStyle: s.btnAbsentActive },
+    { key: ATTENDANCE_STATUS.FULL,     label: "8 hrs",  activeStyle: s.btnFullActive   },
+    { key: ATTENDANCE_STATUS.OVERTIME, label: "12 hrs", activeStyle: s.btnOTActive     },
   ];
 
   return (
+    // Outer wrapper: fills the scroll container passed down from App.jsx
     <div style={s.page}>
 
-      {/* ── HEADER ── */}
+      {/* ── STICKY HEADER ── */}
       <div style={s.header}>
         <div>
           <h2 style={s.heading}>Attendance</h2>
@@ -146,135 +147,138 @@ export default function Attendance() {
         </button>
       </div>
 
-      {/* ── DATE PICKER ── */}
-      <div style={s.dateCard}>
-        <label style={s.dateLabel}>Date</label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={s.dateInput}
-        />
+      {/* ── SCROLLABLE BODY ── */}
+      <div style={s.body}>
+
+        {/* Date picker */}
+        <div style={s.dateCard}>
+          <label style={s.dateLabel}>Date</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            style={s.dateInput}
+          />
+        </div>
+
+        {/* Toast */}
+        {message && (
+          <div style={{
+            ...s.toast,
+            background:  messageType === "success" ? "#EAF3DE" : messageType === "error" ? "#FAECE7" : "#EEEDFE",
+            color:       messageType === "success" ? "#3B6D11" : messageType === "error" ? "#993C1D" : "#3C3489",
+            borderColor: messageType === "success" ? "#97C459" : messageType === "error" ? "#F0997B" : "#AFA9EC",
+          }}>
+            {message}
+          </div>
+        )}
+
+        {/* Worker cards */}
+        {activeWorkers.length === 0 ? (
+          <div style={s.emptyState}>
+            <div style={s.emptyIcon}>👷</div>
+            <p style={s.emptyTitle}>No active workers</p>
+            <p style={s.emptyHint}>Add or restore workers from the Workers tab</p>
+          </div>
+        ) : (
+          <div style={s.list}>
+            {activeWorkers.map((w) => {
+              const current = draft[w.id] || {};
+              const unmarked = isUnmarked(w.id);
+
+              return (
+                <div
+                  key={w.id}
+                  style={{
+                    ...s.card,
+                    borderColor: unmarked ? "#FAC775" : "#eeecfd",
+                    background:  unmarked ? "#FAEEDA" : "#ffffff",
+                  }}
+                >
+                  {/* Top row */}
+                  <div style={s.cardTop}>
+                    <div style={{
+                      ...s.avatar,
+                      background: unmarked ? "#FAC775" : "#EEEDFE",
+                      color:      unmarked ? "#633806" : "#3C3489",
+                    }}>
+                      {getInitials(w.name)}
+                    </div>
+
+                    <div style={s.workerInfo}>
+                      <p style={s.workerName}>{w.name}</p>
+                      <p style={{
+                        ...s.workerStatus,
+                        color: unmarked
+                          ? "#854F0B"
+                          : current.status === ATTENDANCE_STATUS.ABSENT
+                          ? "#993C1D"
+                          : "#3B6D11",
+                      }}>
+                        {statusLabel(current.status)}
+                      </p>
+                    </div>
+
+                    {!unmarked && (
+                      <span style={{
+                        ...s.statusDot,
+                        background: current.status === ATTENDANCE_STATUS.ABSENT
+                          ? "#FAECE7"
+                          : current.status === ATTENDANCE_STATUS.OVERTIME
+                          ? "#EEEDFE"
+                          : "#EAF3DE",
+                        color: current.status === ATTENDANCE_STATUS.ABSENT
+                          ? "#993C1D"
+                          : current.status === ATTENDANCE_STATUS.OVERTIME
+                          ? "#3C3489"
+                          : "#3B6D11",
+                      }}>
+                        {current.status === ATTENDANCE_STATUS.ABSENT
+                          ? "A"
+                          : current.status === ATTENDANCE_STATUS.FULL
+                          ? "8h" : "12h"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Status buttons */}
+                  <div style={s.statusRow}>
+                    {statusOptions.map((opt) => (
+                      <button
+                        key={opt.key}
+                        style={{
+                          ...s.statusBtn,
+                          ...(current.status === opt.key ? opt.activeStyle : {}),
+                        }}
+                        onClick={() => setStatus(w.id, opt.key)}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Advance */}
+                  <div style={s.advanceRow}>
+                    <label style={s.advanceLabel}>Advance (₹)</label>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={current.advance || ""}
+                      onChange={(e) => setAdvance(w.id, e.target.value)}
+                      style={s.advanceInput}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* ── TOAST ── */}
-      {message && (
-        <div style={{
-          ...s.toast,
-          background:   messageType === "success" ? "#EAF3DE" : messageType === "error" ? "#FAECE7" : "#EEEDFE",
-          color:        messageType === "success" ? "#3B6D11" : messageType === "error" ? "#993C1D" : "#3C3489",
-          borderColor:  messageType === "success" ? "#97C459" : messageType === "error" ? "#F0997B" : "#AFA9EC",
-        }}>
-          {message}
-        </div>
-      )}
-
-      {/* ── WORKER CARDS ── */}
-      {activeWorkers.length === 0 ? (
-        <div style={s.emptyState}>
-          <div style={s.emptyIcon}>👷</div>
-          <p style={s.emptyTitle}>No active workers</p>
-          <p style={s.emptyHint}>Add or restore workers from the Workers tab</p>
-        </div>
-      ) : (
-        <div style={s.list}>
-          {activeWorkers.map((w) => {
-            const current = draft[w.id] || {};
-            const unmarked = isUnmarked(w.id);
-
-            return (
-              <div
-                key={w.id}
-                style={{
-                  ...s.card,
-                  borderColor: unmarked ? "#FAC775" : "#eeecfd",
-                  background:  unmarked ? "#FAEEDA"  : "#ffffff",
-                }}
-              >
-                {/* Top row — avatar + name + status badge */}
-                <div style={s.cardTop}>
-                  <div style={{
-                    ...s.avatar,
-                    background: unmarked ? "#FAC775" : "#EEEDFE",
-                    color:      unmarked ? "#633806"  : "#3C3489",
-                  }}>
-                    {getInitials(w.name)}
-                  </div>
-
-                  <div style={s.workerInfo}>
-                    <p style={s.workerName}>{w.name}</p>
-                    <p style={{
-                      ...s.workerStatus,
-                      color: unmarked
-                        ? "#854F0B"
-                        : current.status === ATTENDANCE_STATUS.ABSENT
-                        ? "#993C1D"
-                        : "#3B6D11",
-                    }}>
-                      {statusLabel(current.status)}
-                    </p>
-                  </div>
-
-                  {!unmarked && (
-                    <span style={{
-                      ...s.statusDot,
-                      background: current.status === ATTENDANCE_STATUS.ABSENT
-                        ? "#FAECE7"
-                        : current.status === ATTENDANCE_STATUS.OVERTIME
-                        ? "#EEEDFE"
-                        : "#EAF3DE",
-                      color: current.status === ATTENDANCE_STATUS.ABSENT
-                        ? "#993C1D"
-                        : current.status === ATTENDANCE_STATUS.OVERTIME
-                        ? "#3C3489"
-                        : "#3B6D11",
-                    }}>
-                      {current.status === ATTENDANCE_STATUS.ABSENT
-                        ? "A"
-                        : current.status === ATTENDANCE_STATUS.FULL
-                        ? "8h"
-                        : "12h"}
-                    </span>
-                  )}
-                </div>
-
-                {/* Status buttons */}
-                <div style={s.statusRow}>
-                  {statusOptions.map((opt) => (
-                    <button
-                      key={opt.key}
-                      style={{
-                        ...s.statusBtn,
-                        ...(current.status === opt.key ? opt.activeStyle : {}),
-                      }}
-                      onClick={() => setStatus(w.id, opt.key)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Advance input */}
-                <div style={s.advanceRow}>
-                  <label style={s.advanceLabel}>Advance (₹)</label>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    placeholder="0"
-                    value={current.advance || ""}
-                    onChange={(e) => setAdvance(w.id, e.target.value)}
-                    style={s.advanceInput}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* ── SAVE ── */}
+      {/* ── STICKY SAVE FOOTER ── */}
       {activeWorkers.length > 0 && (
-        <div style={s.saveWrap}>
+        <div style={s.saveFooter}>
           {unmarkedCount > 0 && (
             <p style={s.saveWarning}>
               {unmarkedCount} unmarked worker{unmarkedCount > 1 ? "s" : ""} will be saved as Absent
@@ -295,29 +299,33 @@ export default function Attendance() {
 }
 
 const s = {
+  // Fills the scroll container from App.jsx — no min-height or padding-bottom hacks
   page: {
-    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",           // fills the content div in App.jsx exactly
     background: "#f4f3ff",
-    paddingBottom: "120px",
+    overflow: "hidden",       // page itself doesn't scroll — body div does
   },
 
-  // ── Header
+  // ── Sticky header — never scrolls away
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "20px 16px 14px",
+    padding: "16px 16px 12px",
     background: "#ffffff",
     borderBottom: "1px solid #eeecfd",
+    flexShrink: 0,            // won't compress
   },
   heading: {
-    fontSize: "22px",
+    fontSize: "20px",
     fontWeight: "700",
     color: "#1a1a2e",
     lineHeight: 1.2,
   },
   subHeading: {
-    fontSize: "13px",
+    fontSize: "12px",
     color: "#888",
     marginTop: "2px",
   },
@@ -336,12 +344,21 @@ const s = {
     flexShrink: 0,
   },
 
-  // ── Date
+  // ── Scrollable middle — grows to fill remaining space
+  body: {
+    flex: 1,
+    overflowY: "auto",
+    overflowX: "hidden",
+    WebkitOverflowScrolling: "touch",
+    padding: "0 0 8px 0",
+  },
+
+  // ── Date card
   dateCard: {
     background: "#ffffff",
-    margin: "12px 12px 0",
+    margin: "10px 12px 0",
     borderRadius: "14px",
-    padding: "14px 16px",
+    padding: "12px 16px",
     border: "1px solid #eeecfd",
     display: "flex",
     alignItems: "center",
@@ -354,8 +371,8 @@ const s = {
     color: "#555",
   },
   dateInput: {
-    height: "38px",
-    padding: "0 12px",
+    height: "36px",
+    padding: "0 10px",
     border: "1.5px solid #e4e2f8",
     borderRadius: "10px",
     fontSize: "14px",
@@ -367,8 +384,8 @@ const s = {
 
   // ── Toast
   toast: {
-    margin: "10px 12px 0",
-    padding: "10px 14px",
+    margin: "8px 12px 0",
+    padding: "9px 14px",
     borderRadius: "10px",
     border: "1px solid",
     fontSize: "13px",
@@ -376,45 +393,45 @@ const s = {
     textAlign: "center",
   },
 
-  // ── Empty
+  // ── Empty state
   emptyState: {
     margin: "12px",
-    padding: "40px 20px",
+    padding: "36px 20px",
     background: "#ffffff",
     border: "2px dashed #d6d3f5",
     borderRadius: "16px",
     textAlign: "center",
   },
-  emptyIcon: { fontSize: "38px", marginBottom: "10px" },
-  emptyTitle: { fontSize: "16px", fontWeight: "600", color: "#444" },
-  emptyHint: { fontSize: "13px", color: "#aaa", marginTop: "6px", lineHeight: 1.5 },
+  emptyIcon:  { fontSize: "36px", marginBottom: "10px" },
+  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#444" },
+  emptyHint:  { fontSize: "13px", color: "#aaa", marginTop: "6px", lineHeight: 1.5 },
 
-  // ── List
+  // ── Worker list
   list: {
     display: "flex",
     flexDirection: "column",
     gap: "10px",
-    padding: "12px 12px 0",
+    padding: "10px 12px 0",
   },
 
-  // ── Card
+  // ── Worker card
   card: {
     borderRadius: "14px",
     border: "1.5px solid",
-    padding: "14px",
+    padding: "12px 14px",
   },
   cardTop: {
     display: "flex",
     alignItems: "center",
     gap: "12px",
-    marginBottom: "14px",
+    marginBottom: "12px",
   },
   avatar: {
-    width: "42px",
-    height: "42px",
-    minWidth: "42px",
+    width: "40px",
+    height: "40px",
+    minWidth: "40px",
     borderRadius: "50%",
-    fontSize: "14px",
+    fontSize: "13px",
     fontWeight: "700",
     display: "flex",
     alignItems: "center",
@@ -422,7 +439,7 @@ const s = {
   },
   workerInfo: { flex: 1, minWidth: 0 },
   workerName: {
-    fontSize: "15px",
+    fontSize: "14px",
     fontWeight: "600",
     color: "#1a1a2e",
     whiteSpace: "nowrap",
@@ -432,12 +449,12 @@ const s = {
   workerStatus: {
     fontSize: "12px",
     fontWeight: "500",
-    marginTop: "3px",
+    marginTop: "2px",
   },
   statusDot: {
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: "700",
-    padding: "4px 10px",
+    padding: "3px 9px",
     borderRadius: "20px",
     flexShrink: 0,
   },
@@ -445,12 +462,12 @@ const s = {
   // ── Status buttons
   statusRow: {
     display: "flex",
-    gap: "8px",
-    marginBottom: "12px",
+    gap: "6px",
+    marginBottom: "10px",
   },
   statusBtn: {
     flex: 1,
-    height: "40px",
+    height: "38px",
     border: "1.5px solid #e4e2f8",
     borderRadius: "10px",
     fontSize: "13px",
@@ -476,7 +493,7 @@ const s = {
     color: "#3C3489",
   },
 
-  // ── Advance
+  // ── Advance input
   advanceRow: {
     display: "flex",
     alignItems: "center",
@@ -490,7 +507,7 @@ const s = {
   },
   advanceInput: {
     flex: 1,
-    height: "40px",
+    height: "38px",
     padding: "0 12px",
     border: "1.5px solid #e4e2f8",
     borderRadius: "10px",
@@ -502,9 +519,12 @@ const s = {
     boxSizing: "border-box",
   },
 
-  // ── Save
-  saveWrap: {
-    padding: "14px 12px 0",
+  // ── Sticky save footer — pinned to bottom of page, above nav
+  saveFooter: {
+    padding: "10px 12px",
+    background: "#f4f3ff",
+    borderTop: "1px solid #eeecfd",
+    flexShrink: 0,            // never shrinks away
   },
   saveWarning: {
     fontSize: "12px",
@@ -512,19 +532,19 @@ const s = {
     background: "#FAEEDA",
     border: "1px solid #FAC775",
     borderRadius: "8px",
-    padding: "8px 12px",
-    marginBottom: "10px",
+    padding: "7px 12px",
+    marginBottom: "8px",
     textAlign: "center",
     fontWeight: "500",
   },
   saveBtn: {
     width: "100%",
-    height: "52px",
+    height: "48px",
     background: "#534AB7",
     color: "#fff",
     border: "none",
-    borderRadius: "14px",
-    fontSize: "16px",
+    borderRadius: "12px",
+    fontSize: "15px",
     fontWeight: "600",
     cursor: "pointer",
     WebkitTapHighlightColor: "transparent",

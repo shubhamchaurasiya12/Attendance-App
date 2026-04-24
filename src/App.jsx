@@ -49,8 +49,8 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
         <div style={s.statusLeft}>
           <span style={{
             ...s.dot,
-            background:  isOnline ? "#3B6D11"          : "#993C1D",
-            boxShadow:   isOnline ? "0 0 0 3px #EAF3DE" : "0 0 0 3px #FAECE7",
+            background: isOnline ? "#3B6D11"           : "#993C1D",
+            boxShadow:  isOnline ? "0 0 0 3px #EAF3DE" : "0 0 0 3px #FAECE7",
           }}/>
           <span style={{
             ...s.statusText,
@@ -60,17 +60,12 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
           </span>
         </div>
 
-        {message && (
-          <span style={s.messageText}>{message}</span>
-        )}
+        {message && <span style={s.messageText}>{message}</span>}
 
         <button
           onClick={onSync}
           disabled={isSyncing || !isOnline}
-          style={{
-            ...s.syncBtn,
-            opacity: isSyncing || !isOnline ? 0.45 : 1,
-          }}
+          style={{ ...s.syncBtn, opacity: isSyncing || !isOnline ? 0.45 : 1 }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
             style={{ marginRight: "5px", flexShrink: 0 }}>
@@ -83,7 +78,9 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
         </button>
       </div>
 
-      {/* ── SCROLLABLE CONTENT ── */}
+      {/* ── CONTENT ──
+           display:flex + flexDirection:column lets child pages
+           use height:100% to fill this area exactly            */}
       <div style={s.content}>
         <Routes>
           <Route path="/"           element={<Workers />}       />
@@ -100,13 +97,15 @@ function AppShell({ isSyncing, isOnline, message, onSync }) {
               key={to}
               to={to}
               end
-              style={{ textDecoration: "none", flex: 1 }}
+              style={{ textDecoration: "none", flex: 1, minWidth: 0 }}
             >
               {({ isActive }) => (
                 <div style={s.navItem}>
+                  {/* Pill wraps icon on active */}
                   <div style={{
                     ...s.iconWrap,
-                    background: isActive ? "#EEEDFE" : "transparent",
+                    background:   isActive ? "#EEEDFE"  : "transparent",
+                    width:        isActive ? "56px"     : "44px",
                   }}>
                     <Icon active={isActive} />
                   </div>
@@ -145,7 +144,6 @@ export default function App() {
   useEffect(() => {
     const handleOnline  = () => { setIsOnline(true);  autoSync(); };
     const handleOffline = () => { setIsOnline(false); setMessage("Offline mode"); };
-
     window.addEventListener("online",  handleOnline);
     window.addEventListener("offline", handleOffline);
     return () => {
@@ -185,20 +183,19 @@ export default function App() {
 }
 
 const s = {
-  // ── Container — locked to viewport, nothing overflows
+  // ── Container
   container: {
     display: "flex",
     flexDirection: "column",
-    height: "100vh",
-    maxHeight: "100vh",       // lock to viewport height
-    overflow: "hidden",       // prevent full-page scroll
+    height: "100dvh",             // dvh = dynamic viewport height — correct on mobile browsers
+    overflow: "hidden",           // nothing overflows the shell
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     background: "#f4f3ff",
     maxWidth: "480px",
     margin: "0 auto",
   },
 
-  // ── Status bar — pinned at top
+  // ── Status bar
   statusBar: {
     display: "flex",
     alignItems: "center",
@@ -207,7 +204,7 @@ const s = {
     background: "#ffffff",
     borderBottom: "1px solid #eeecfd",
     minHeight: "42px",
-    flexShrink: 0,            // never shrink — always visible
+    flexShrink: 0,
     gap: "8px",
   },
   statusLeft: {
@@ -230,6 +227,9 @@ const s = {
     color: "#888",
     flex: 1,
     textAlign: "center",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   syncBtn: {
     display: "flex",
@@ -244,45 +244,58 @@ const s = {
     borderRadius: "20px",
     cursor: "pointer",
     flexShrink: 0,
+    WebkitTapHighlightColor: "transparent",
   },
 
-  // ── Content — only this div scrolls
+  // ── Content
+  // flex column + height 100% lets Workers/Attendance fill this exactly
   content: {
-    flex: 1,                          // fills all space between status bar and nav
-    overflowY: "auto",                // scrolls independently
-    overflowX: "hidden",
-    WebkitOverflowScrolling: "touch", // smooth momentum scroll on iOS
+    flex: 1,
+    display: "flex",              // ← critical: child pages use height:100%
+    flexDirection: "column",      // ← critical: Routes > page fills vertically
+    overflow: "hidden",           // pages manage their own scroll internally
+    minHeight: 0,                 // flex children can shrink below content size
   },
 
-  // ── Bottom nav — pinned at bottom
+  // ── Bottom nav
   nav: {
     display: "flex",
+    alignItems: "stretch",
     background: "#ffffff",
     borderTop: "1px solid #eeecfd",
-    padding: "6px 16px",
-    paddingBottom: "max(10px, env(safe-area-inset-bottom))", // iPhone home bar safe area
-    gap: "8px",
-    flexShrink: 0,            // never shrink — always visible
+    // safe-area-inset-bottom: pads above iPhone home bar
+    paddingBottom: "max(8px, env(safe-area-inset-bottom))",
+    paddingTop: "6px",
+    paddingLeft: "8px",
+    paddingRight: "8px",
+    flexShrink: 0,                // never compressed — always visible
+    gap: "4px",
   },
   navItem: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    gap: "4px",
-    padding: "4px 0",
+    justifyContent: "center",
+    gap: "3px",
+    paddingTop: "2px",
+    paddingBottom: "2px",
     cursor: "pointer",
     WebkitTapHighlightColor: "transparent",
+    flex: 1,                      // each tab takes equal width
+    minWidth: 0,                  // prevents overflow on small screens
   },
   iconWrap: {
-    width: "48px",
     height: "30px",
     borderRadius: "20px",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    transition: "width 0.2s ease, background 0.2s ease",
+    // width is set dynamically above (56px active, 44px inactive)
   },
   navLabel: {
     fontSize: "11px",
     letterSpacing: "0.01em",
+    lineHeight: 1,
   },
 };

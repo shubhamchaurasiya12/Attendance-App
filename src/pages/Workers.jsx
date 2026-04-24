@@ -12,6 +12,7 @@ export default function Workers() {
   const [workers, setWorkers] = useState([]);
   const [search, setSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ id: null, name: "", phone: "", wagePer8h: "" });
   const [isEditing, setIsEditing] = useState(false);
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ export default function Workers() {
   const resetForm = () => {
     setForm({ id: null, name: "", phone: "", wagePer8h: "" });
     setIsEditing(false);
+    setShowForm(false);
   };
 
   const handleSubmit = () => {
@@ -54,7 +56,7 @@ export default function Workers() {
   const handleEdit = (worker) => {
     setForm(worker);
     setIsEditing(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setShowForm(true);
   };
 
   const handleArchive = (workerId) => {
@@ -77,7 +79,7 @@ export default function Workers() {
   return (
     <div style={s.page}>
 
-      {/* ── HEADER ── */}
+      {/* ── STICKY HEADER ── */}
       <div style={s.header}>
         <div>
           <h2 style={s.heading}>Workers</h2>
@@ -85,213 +87,264 @@ export default function Workers() {
             {activeCount} active · {archivedCount} archived
           </p>
         </div>
-        <span style={s.countBadge}>{activeCount}</span>
+
+        <div style={s.headerRight}>
+          <span style={s.countBadge}>{activeCount}</span>
+          {/* Add button — toggles form open/close */}
+          <button
+            onClick={() => {
+              if (isEditing) { resetForm(); } else { setShowForm((p) => !p); }
+            }}
+            style={{
+              ...s.addBtn,
+              background: showForm ? "#FAECE7" : "#534AB7",
+              color:      showForm ? "#993C1D"  : "#fff",
+              border:     showForm ? "1.5px solid #F0997B" : "none",
+            }}
+          >
+            {showForm ? "✕" : "+ Add"}
+          </button>
+        </div>
       </div>
 
-      {/* ── SEARCH + TOGGLE ── */}
-      <div style={s.searchRow}>
-        <div style={s.searchWrap}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={s.searchIcon}>
-            <circle cx="11" cy="11" r="7" stroke="#aaa" strokeWidth="2"/>
-            <path d="M16.5 16.5L21 21" stroke="#aaa" strokeWidth="2" strokeLinecap="round"/>
-          </svg>
-          <input
-            placeholder="Search worker..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={s.searchInput}
-          />
-          {search.length > 0 && (
-            <button onClick={() => setSearch("")} style={s.clearBtn}>✕</button>
-          )}
+      {/* ── SCROLLABLE BODY ── */}
+      <div style={s.body}>
+
+        {/* Search + toggle */}
+        <div style={s.searchRow}>
+          <div style={s.searchWrap}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={s.searchIcon}>
+              <circle cx="11" cy="11" r="7" stroke="#aaa" strokeWidth="2"/>
+              <path d="M16.5 16.5L21 21" stroke="#aaa" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            <input
+              placeholder="Search worker..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={s.searchInput}
+            />
+            {search.length > 0 && (
+              <button onClick={() => setSearch("")} style={s.clearBtn}>✕</button>
+            )}
+          </div>
+
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            style={{
+              ...s.toggleBtn,
+              background: showArchived ? "#FAEEDA" : "#EEEDFE",
+              color:      showArchived ? "#633806"  : "#3C3489",
+              border:     `1.5px solid ${showArchived ? "#FAC775" : "#AFA9EC"}`,
+            }}
+          >
+            {showArchived ? "Active" : "Archived"}
+          </button>
         </div>
 
-        <button
-          onClick={() => setShowArchived(!showArchived)}
-          style={{
-            ...s.toggleBtn,
-            background: showArchived ? "#FAEEDA" : "#EEEDFE",
-            color:      showArchived ? "#633806"  : "#3C3489",
-            border:     `1.5px solid ${showArchived ? "#FAC775" : "#AFA9EC"}`,
-          }}
-        >
-          {showArchived ? "Active" : "Archived"}
-        </button>
-      </div>
+        {/* Form — collapsible */}
+        {showForm && (
+          <div style={s.formCard}>
+            <p style={s.formLabel}>
+              {isEditing ? "✏️  Editing worker" : "➕  New worker"}
+            </p>
 
-      {/* ── FORM ── */}
-      <div style={s.formCard}>
-        <p style={s.formLabel}>
-          {isEditing ? "✏️  Editing worker" : "➕  New worker"}
-        </p>
-
-        <div style={s.field}>
-          <label style={s.label}>Full name *</label>
-          <input
-            name="name"
-            placeholder="e.g. Ramesh Kumar"
-            value={form.name}
-            onChange={handleChange}
-            style={s.input}
-          />
-        </div>
-
-        <div style={s.field}>
-          <label style={s.label}>Mobile number</label>
-          <input
-            name="phone"
-            placeholder="e.g. 9876543210"
-            type="tel"
-            inputMode="numeric"
-            value={form.phone}
-            onChange={handleChange}
-            style={s.input}
-          />
-        </div>
-
-        <div style={s.field}>
-          <label style={s.label}>Wage per 8 hours (₹) *</label>
-          <input
-            name="wagePer8h"
-            placeholder="e.g. 600"
-            type="number"
-            inputMode="numeric"
-            value={form.wagePer8h}
-            onChange={handleChange}
-            style={s.input}
-          />
-        </div>
-
-        <button onClick={handleSubmit} style={s.btnPrimary}>
-          {isEditing ? "Update Worker" : "Add Worker"}
-        </button>
-
-        {isEditing && (
-          <button onClick={resetForm} style={s.btnCancel}>Cancel</button>
-        )}
-      </div>
-
-      {/* ── LIST ── */}
-      {filteredWorkers.length === 0 ? (
-        <div style={s.emptyState}>
-          <div style={s.emptyIcon}>{search ? "🔍" : showArchived ? "📦" : "👷"}</div>
-          <p style={s.emptyTitle}>
-            {search
-              ? `No results for "${search}"`
-              : showArchived
-              ? "No archived workers"
-              : "No workers yet"}
-          </p>
-          <p style={s.emptyHint}>
-            {search
-              ? "Try a different name"
-              : showArchived
-              ? "Archive a worker from the active list"
-              : "Fill the form above to add your first worker"}
-          </p>
-        </div>
-      ) : (
-        <div style={s.list}>
-
-          {/* Section label */}
-          <p style={s.sectionLabel}>
-            {showArchived ? "Archived" : "Active"} · {filteredWorkers.length} shown
-          </p>
-
-          {filteredWorkers.map((w) => (
-            <div
-              key={w.id}
-              style={{ ...s.card, ...(w.isActive ? {} : s.archivedCard) }}
-              onClick={() => goToDetails(w.id)}
-            >
-              <div style={s.cardLeft}>
-                <div style={{
-                  ...s.avatar,
-                  background: w.isActive ? "#EEEDFE" : "#e8e8e8",
-                  color:      w.isActive ? "#3C3489"  : "#777",
-                }}>
-                  {getInitials(w.name)}
-                </div>
-
-                <div style={s.info}>
-                  <div style={s.nameRow}>
-                    <p style={s.workerName}>{w.name}</p>
-                    {!w.isActive && (
-                      <span style={s.archivedBadge}>Archived</span>
-                    )}
-                  </div>
-                  <p style={s.workerPhone}>{w.phone || "No phone"}</p>
-                  <span style={{
-                    ...s.wageBadge,
-                    background: w.isActive ? "#EAF3DE" : "#efefef",
-                    color:      w.isActive ? "#3B6D11"  : "#888",
-                  }}>
-                    ₹{Number(w.wagePer8h).toLocaleString("en-IN")} / 8h
-                  </span>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div style={s.actions} onClick={(e) => e.stopPropagation()}>
-                {w.isActive && (
-                  <button style={s.btnEdit} onClick={() => handleEdit(w)}>
-                    Edit
-                  </button>
-                )}
-                <button
-                  style={w.isActive ? s.btnArchive : s.btnRestore}
-                  onClick={() => handleArchive(w.id)}
-                >
-                  {w.isActive ? "Archive" : "Restore"}
-                </button>
-              </div>
+            <div style={s.field}>
+              <label style={s.label}>Full name *</label>
+              <input
+                name="name"
+                placeholder="e.g. Ramesh Kumar"
+                value={form.name}
+                onChange={handleChange}
+                style={s.input}
+              />
             </div>
-          ))}
-        </div>
-      )}
+
+            <div style={s.field}>
+              <label style={s.label}>Mobile number</label>
+              <input
+                name="phone"
+                placeholder="e.g. 9876543210"
+                type="tel"
+                inputMode="numeric"
+                value={form.phone}
+                onChange={handleChange}
+                style={s.input}
+              />
+            </div>
+
+            <div style={s.field}>
+              <label style={s.label}>Wage per 8 hours (₹) *</label>
+              <input
+                name="wagePer8h"
+                placeholder="e.g. 600"
+                type="number"
+                inputMode="numeric"
+                value={form.wagePer8h}
+                onChange={handleChange}
+                style={s.input}
+              />
+            </div>
+
+            <button onClick={handleSubmit} style={s.btnPrimary}>
+              {isEditing ? "Update Worker" : "Add Worker"}
+            </button>
+
+            {isEditing && (
+              <button onClick={resetForm} style={s.btnCancel}>Cancel</button>
+            )}
+          </div>
+        )}
+
+        {/* Worker list */}
+        {filteredWorkers.length === 0 ? (
+          <div style={s.emptyState}>
+            <div style={s.emptyIcon}>
+              {search ? "🔍" : showArchived ? "📦" : "👷"}
+            </div>
+            <p style={s.emptyTitle}>
+              {search
+                ? `No results for "${search}"`
+                : showArchived
+                ? "No archived workers"
+                : "No workers yet"}
+            </p>
+            <p style={s.emptyHint}>
+              {search
+                ? "Try a different name"
+                : showArchived
+                ? "Archive a worker from the active list"
+                : 'Tap "+ Add" above to add your first worker'}
+            </p>
+          </div>
+        ) : (
+          <div style={s.list}>
+            <p style={s.sectionLabel}>
+              {showArchived ? "Archived" : "Active"} · {filteredWorkers.length} shown
+            </p>
+
+            {filteredWorkers.map((w) => (
+              <div
+                key={w.id}
+                style={{ ...s.card, ...(w.isActive ? {} : s.archivedCard) }}
+                onClick={() => goToDetails(w.id)}
+              >
+                <div style={s.cardLeft}>
+                  <div style={{
+                    ...s.avatar,
+                    background: w.isActive ? "#EEEDFE" : "#e8e8e8",
+                    color:      w.isActive ? "#3C3489"  : "#777",
+                  }}>
+                    {getInitials(w.name)}
+                  </div>
+
+                  <div style={s.info}>
+                    <div style={s.nameRow}>
+                      <p style={s.workerName}>{w.name}</p>
+                      {!w.isActive && (
+                        <span style={s.archivedBadge}>Archived</span>
+                      )}
+                    </div>
+                    <p style={s.workerPhone}>{w.phone || "No phone"}</p>
+                    <span style={{
+                      ...s.wageBadge,
+                      background: w.isActive ? "#EAF3DE" : "#efefef",
+                      color:      w.isActive ? "#3B6D11"  : "#888",
+                    }}>
+                      ₹{Number(w.wagePer8h).toLocaleString("en-IN")} / 8h
+                    </span>
+                  </div>
+                </div>
+
+                <div style={s.actions} onClick={(e) => e.stopPropagation()}>
+                  {w.isActive && (
+                    <button style={s.btnEdit} onClick={() => handleEdit(w)}>
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    style={w.isActive ? s.btnArchive : s.btnRestore}
+                    onClick={() => handleArchive(w.id)}
+                  >
+                    {w.isActive ? "Archive" : "Restore"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>{/* end body */}
     </div>
   );
 }
 
 const s = {
+  // Fills App.jsx content div exactly — no minHeight or paddingBottom
   page: {
-    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
     background: "#f4f3ff",
-    paddingBottom: "100px",
+    overflow: "hidden",
   },
 
-  // ── Header
+  // ── Sticky header
   header: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "20px 16px 14px",
+    padding: "16px 16px 12px",
     background: "#ffffff",
     borderBottom: "1px solid #eeecfd",
+    flexShrink: 0,
   },
   heading: {
-    fontSize: "22px",
+    fontSize: "20px",
     fontWeight: "700",
     color: "#1a1a2e",
     lineHeight: 1.2,
   },
   subHeading: {
-    fontSize: "13px",
+    fontSize: "12px",
     color: "#888",
     marginTop: "2px",
   },
+  headerRight: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
   countBadge: {
-    width: "40px",
-    height: "40px",
+    width: "36px",
+    height: "36px",
     borderRadius: "50%",
     background: "#534AB7",
     color: "#fff",
-    fontSize: "16px",
+    fontSize: "14px",
     fontWeight: "700",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+  },
+  addBtn: {
+    height: "36px",
+    padding: "0 14px",
+    borderRadius: "20px",
+    fontSize: "13px",
+    fontWeight: "600",
+    cursor: "pointer",
+    flexShrink: 0,
+    WebkitTapHighlightColor: "transparent",
+  },
+
+  // ── Scrollable body
+  body: {
+    flex: 1,
+    overflowY: "auto",
+    overflowX: "hidden",
+    WebkitOverflowScrolling: "touch",
+    padding: "0 0 12px 0",
   },
 
   // ── Search row
@@ -299,7 +352,7 @@ const s = {
     display: "flex",
     gap: "8px",
     alignItems: "center",
-    padding: "12px 12px 0",
+    padding: "10px 12px 0",
   },
   searchWrap: {
     flex: 1,
@@ -311,12 +364,11 @@ const s = {
     position: "absolute",
     left: "12px",
     pointerEvents: "none",
-    flexShrink: 0,
   },
   searchInput: {
     width: "100%",
-    height: "44px",
-    padding: "0 36px 0 36px",
+    height: "42px",
+    padding: "0 34px 0 34px",
     border: "1.5px solid #e4e2f8",
     borderRadius: "12px",
     fontSize: "14px",
@@ -337,8 +389,8 @@ const s = {
     padding: "4px",
   },
   toggleBtn: {
-    height: "44px",
-    padding: "0 14px",
+    height: "42px",
+    padding: "0 12px",
     borderRadius: "12px",
     fontSize: "13px",
     fontWeight: "600",
@@ -347,10 +399,10 @@ const s = {
     WebkitTapHighlightColor: "transparent",
   },
 
-  // ── Form
+  // ── Form card
   formCard: {
     background: "#ffffff",
-    margin: "12px 12px 0",
+    margin: "10px 12px 0",
     borderRadius: "16px",
     padding: "16px",
     border: "1px solid #eeecfd",
@@ -359,19 +411,19 @@ const s = {
     fontSize: "13px",
     fontWeight: "600",
     color: "#534AB7",
-    marginBottom: "14px",
+    marginBottom: "12px",
   },
-  field: { marginBottom: "12px" },
+  field: { marginBottom: "10px" },
   label: {
     display: "block",
     fontSize: "12px",
     fontWeight: "600",
     color: "#555",
-    marginBottom: "6px",
+    marginBottom: "5px",
   },
   input: {
     width: "100%",
-    height: "48px",
+    height: "46px",
     padding: "0 14px",
     border: "1.5px solid #e4e2f8",
     borderRadius: "10px",
@@ -384,73 +436,69 @@ const s = {
   },
   btnPrimary: {
     width: "100%",
-    height: "50px",
+    height: "48px",
     marginTop: "4px",
     background: "#534AB7",
     color: "#fff",
     border: "none",
     borderRadius: "12px",
-    fontSize: "16px",
+    fontSize: "15px",
     fontWeight: "600",
     cursor: "pointer",
+    WebkitTapHighlightColor: "transparent",
   },
   btnCancel: {
     width: "100%",
-    height: "46px",
+    height: "44px",
     marginTop: "8px",
     background: "transparent",
     color: "#888",
     border: "1.5px solid #e0e0e0",
     borderRadius: "12px",
-    fontSize: "15px",
+    fontSize: "14px",
     cursor: "pointer",
   },
 
   // ── List
+  list: {
+    padding: "10px 12px 0",
+    display: "flex",
+    flexDirection: "column",
+  },
   sectionLabel: {
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: "700",
     color: "#aaa",
     textTransform: "uppercase",
     letterSpacing: "0.05em",
     marginBottom: "8px",
   },
-  list: {
-    padding: "12px 12px 0",
-    display: "flex",
-    flexDirection: "column",
-  },
 
   // ── Empty state
   emptyState: {
     margin: "12px",
-    padding: "40px 20px",
+    padding: "36px 20px",
     background: "#ffffff",
     border: "2px dashed #d6d3f5",
     borderRadius: "16px",
     textAlign: "center",
   },
-  emptyIcon: { fontSize: "38px", marginBottom: "10px" },
-  emptyTitle: { fontSize: "16px", fontWeight: "600", color: "#444" },
-  emptyHint: {
-    fontSize: "13px",
-    color: "#aaa",
-    marginTop: "6px",
-    lineHeight: 1.5,
-  },
+  emptyIcon:  { fontSize: "36px", marginBottom: "10px" },
+  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#444" },
+  emptyHint:  { fontSize: "13px", color: "#aaa", marginTop: "6px", lineHeight: 1.5 },
 
   // ── Worker card
   card: {
     background: "#ffffff",
     borderRadius: "14px",
     border: "1.5px solid #eeecfd",
-    padding: "14px",
+    padding: "12px 14px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     gap: "12px",
     cursor: "pointer",
-    marginBottom: "10px",
+    marginBottom: "8px",
     WebkitTapHighlightColor: "transparent",
   },
   archivedCard: {
@@ -466,17 +514,17 @@ const s = {
     minWidth: 0,
   },
   avatar: {
-    width: "46px",
-    height: "46px",
-    minWidth: "46px",
+    width: "42px",
+    height: "42px",
+    minWidth: "42px",
     borderRadius: "50%",
-    fontSize: "15px",
+    fontSize: "14px",
     fontWeight: "700",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
   },
-  info: { flex: 1, minWidth: 0 },
+  info:    { flex: 1, minWidth: 0 },
   nameRow: {
     display: "flex",
     alignItems: "center",
@@ -484,7 +532,7 @@ const s = {
     marginBottom: "3px",
   },
   workerName: {
-    fontSize: "15px",
+    fontSize: "14px",
     fontWeight: "600",
     color: "#1a1a2e",
     whiteSpace: "nowrap",
@@ -504,7 +552,7 @@ const s = {
   workerPhone: {
     fontSize: "12px",
     color: "#999",
-    marginBottom: "6px",
+    marginBottom: "5px",
   },
   wageBadge: {
     display: "inline-block",
@@ -523,7 +571,7 @@ const s = {
   },
   btnEdit: {
     width: "68px",
-    height: "34px",
+    height: "32px",
     borderRadius: "8px",
     fontSize: "12px",
     fontWeight: "600",
@@ -534,7 +582,7 @@ const s = {
   },
   btnArchive: {
     width: "68px",
-    height: "34px",
+    height: "32px",
     borderRadius: "8px",
     fontSize: "12px",
     fontWeight: "600",
@@ -545,7 +593,7 @@ const s = {
   },
   btnRestore: {
     width: "68px",
-    height: "34px",
+    height: "32px",
     borderRadius: "8px",
     fontSize: "12px",
     fontWeight: "600",
