@@ -35,6 +35,10 @@ export default defineConfig({
       },
 
       workbox: {
+        cleanupOutdatedCaches: true, // 🔥 VERY IMPORTANT
+        clientsClaim: true,
+        skipWaiting: true,
+
         runtimeCaching: [
           {
             urlPattern: ({ request }) =>
