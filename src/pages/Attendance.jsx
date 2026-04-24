@@ -16,16 +16,18 @@ export default function Attendance() {
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("info"); // "success" | "error" | "info"
+  const [messageType, setMessageType] = useState("info");
 
   useEffect(() => {
     setWorkers(getWorkers());
   }, []);
 
+  const activeWorkers = workers.filter((w) => w.isActive);
+
   useEffect(() => {
     const attendance = getAttendance();
     const initial = {};
-    workers.forEach((w) => {
+    activeWorkers.forEach((w) => {
       const existing = attendance.find(
         (a) => a.workerId === w.id && a.date === date
       );
@@ -53,7 +55,7 @@ export default function Attendance() {
 
   const isUnmarked = (workerId) => !draft[workerId]?.status;
 
-  const unmarkedCount = workers.filter((w) => isUnmarked(w.id)).length;
+  const unmarkedCount = activeWorkers.filter((w) => isUnmarked(w.id)).length;
 
   const showMessage = (text, type = "info") => {
     setMessage(text);
@@ -66,7 +68,7 @@ export default function Attendance() {
     if (!confirm("Save attendance for this date?")) return;
     setIsSaving(true);
     try {
-      workers.forEach((w) => {
+      activeWorkers.forEach((w) => {
         const entry = createAttendanceEntry({
           workerId: w.id,
           date,
@@ -99,26 +101,17 @@ export default function Attendance() {
   const getInitials = (name) =>
     name.trim().split(" ").map((n) => n[0]?.toUpperCase() ?? "").slice(0, 2).join("");
 
-  // Status button config
+  const statusLabel = (status) => {
+    if (status === ATTENDANCE_STATUS.FULL)     return "Present — 8 hrs";
+    if (status === ATTENDANCE_STATUS.OVERTIME) return "Overtime — 12 hrs";
+    if (status === ATTENDANCE_STATUS.ABSENT)   return "Absent";
+    return "Not marked yet";
+  };
+
   const statusOptions = [
-    {
-      key: ATTENDANCE_STATUS.ABSENT,
-      label: "Absent",
-      short: "A",
-      activeStyle: s.btnAbsentActive,
-    },
-    {
-      key: ATTENDANCE_STATUS.FULL,
-      label: "8 hrs",
-      short: "8h",
-      activeStyle: s.btnFullActive,
-    },
-    {
-      key: ATTENDANCE_STATUS.OVERTIME,
-      label: "12 hrs",
-      short: "12h",
-      activeStyle: s.btnOTActive,
-    },
+    { key: ATTENDANCE_STATUS.ABSENT,   label: "Absent",  activeStyle: s.btnAbsentActive },
+    { key: ATTENDANCE_STATUS.FULL,     label: "8 hrs",   activeStyle: s.btnFullActive   },
+    { key: ATTENDANCE_STATUS.OVERTIME, label: "12 hrs",  activeStyle: s.btnOTActive     },
   ];
 
   return (
@@ -129,15 +122,14 @@ export default function Attendance() {
         <div>
           <h2 style={s.heading}>Attendance</h2>
           <p style={s.subHeading}>
-            {unmarkedCount > 0
+            {activeWorkers.length === 0
+              ? "No active workers"
+              : unmarkedCount > 0
               ? `${unmarkedCount} worker${unmarkedCount > 1 ? "s" : ""} unmarked`
-              : workers.length > 0
-              ? "All workers marked"
-              : "No workers yet"}
+              : "All workers marked ✓"}
           </p>
         </div>
 
-        {/* Sync button */}
         <button
           onClick={handleSync}
           disabled={isSyncing}
@@ -165,28 +157,28 @@ export default function Attendance() {
         />
       </div>
 
-      {/* ── TOAST MESSAGE ── */}
+      {/* ── TOAST ── */}
       {message && (
         <div style={{
           ...s.toast,
-          background: messageType === "success" ? "#EAF3DE" : messageType === "error" ? "#FAECE7" : "#EEEDFE",
-          color: messageType === "success" ? "#3B6D11" : messageType === "error" ? "#993C1D" : "#3C3489",
-          borderColor: messageType === "success" ? "#C0DD97" : messageType === "error" ? "#F0997B" : "#AFA9EC",
+          background:   messageType === "success" ? "#EAF3DE" : messageType === "error" ? "#FAECE7" : "#EEEDFE",
+          color:        messageType === "success" ? "#3B6D11" : messageType === "error" ? "#993C1D" : "#3C3489",
+          borderColor:  messageType === "success" ? "#97C459" : messageType === "error" ? "#F0997B" : "#AFA9EC",
         }}>
           {message}
         </div>
       )}
 
       {/* ── WORKER CARDS ── */}
-      {workers.length === 0 ? (
+      {activeWorkers.length === 0 ? (
         <div style={s.emptyState}>
-          <div style={s.emptyIcon}>📋</div>
-          <p style={s.emptyTitle}>No workers found</p>
-          <p style={s.emptyHint}>Add workers first from the Workers tab</p>
+          <div style={s.emptyIcon}>👷</div>
+          <p style={s.emptyTitle}>No active workers</p>
+          <p style={s.emptyHint}>Add or restore workers from the Workers tab</p>
         </div>
       ) : (
         <div style={s.list}>
-          {workers.map((w) => {
+          {activeWorkers.map((w) => {
             const current = draft[w.id] || {};
             const unmarked = isUnmarked(w.id);
 
@@ -196,40 +188,52 @@ export default function Attendance() {
                 style={{
                   ...s.card,
                   borderColor: unmarked ? "#FAC775" : "#eeecfd",
-                  background: unmarked ? "#FAEEDA" : "#ffffff",
+                  background:  unmarked ? "#FAEEDA"  : "#ffffff",
                 }}
               >
-                {/* Worker row */}
+                {/* Top row — avatar + name + status badge */}
                 <div style={s.cardTop}>
                   <div style={{
                     ...s.avatar,
                     background: unmarked ? "#FAC775" : "#EEEDFE",
-                    color: unmarked ? "#633806" : "#3C3489",
+                    color:      unmarked ? "#633806"  : "#3C3489",
                   }}>
                     {getInitials(w.name)}
                   </div>
+
                   <div style={s.workerInfo}>
                     <p style={s.workerName}>{w.name}</p>
                     <p style={{
                       ...s.workerStatus,
-                      color: unmarked ? "#854F0B" : "#3B6D11",
-                    }}>
-                      {unmarked
-                        ? "Not marked yet"
+                      color: unmarked
+                        ? "#854F0B"
                         : current.status === ATTENDANCE_STATUS.ABSENT
-                        ? "Absent"
-                        : current.status === ATTENDANCE_STATUS.FULL
-                        ? "Present — 8 hrs"
-                        : "Overtime — 12 hrs"}
+                        ? "#993C1D"
+                        : "#3B6D11",
+                    }}>
+                      {statusLabel(current.status)}
                     </p>
                   </div>
+
                   {!unmarked && (
                     <span style={{
                       ...s.statusDot,
-                      background: current.status === ATTENDANCE_STATUS.ABSENT ? "#FAECE7" : "#EAF3DE",
-                      color: current.status === ATTENDANCE_STATUS.ABSENT ? "#993C1D" : "#3B6D11",
+                      background: current.status === ATTENDANCE_STATUS.ABSENT
+                        ? "#FAECE7"
+                        : current.status === ATTENDANCE_STATUS.OVERTIME
+                        ? "#EEEDFE"
+                        : "#EAF3DE",
+                      color: current.status === ATTENDANCE_STATUS.ABSENT
+                        ? "#993C1D"
+                        : current.status === ATTENDANCE_STATUS.OVERTIME
+                        ? "#3C3489"
+                        : "#3B6D11",
                     }}>
-                      {current.status === ATTENDANCE_STATUS.ABSENT ? "A" : current.status === ATTENDANCE_STATUS.FULL ? "8h" : "12h"}
+                      {current.status === ATTENDANCE_STATUS.ABSENT
+                        ? "A"
+                        : current.status === ATTENDANCE_STATUS.FULL
+                        ? "8h"
+                        : "12h"}
                     </span>
                   )}
                 </div>
@@ -250,7 +254,7 @@ export default function Attendance() {
                   ))}
                 </div>
 
-                {/* Advance */}
+                {/* Advance input */}
                 <div style={s.advanceRow}>
                   <label style={s.advanceLabel}>Advance (₹)</label>
                   <input
@@ -268,12 +272,12 @@ export default function Attendance() {
         </div>
       )}
 
-      {/* ── SAVE BUTTON ── */}
-      {workers.length > 0 && (
+      {/* ── SAVE ── */}
+      {activeWorkers.length > 0 && (
         <div style={s.saveWrap}>
           {unmarkedCount > 0 && (
             <p style={s.saveWarning}>
-              {unmarkedCount} unmarked worker{unmarkedCount > 1 ? "s" : ""} will be marked Absent
+              {unmarkedCount} unmarked worker{unmarkedCount > 1 ? "s" : ""} will be saved as Absent
             </p>
           )}
           <button
@@ -294,7 +298,7 @@ const s = {
   page: {
     minHeight: "100vh",
     background: "#f4f3ff",
-    padding: "0 0 120px 0",
+    paddingBottom: "120px",
   },
 
   // ── Header
@@ -332,7 +336,7 @@ const s = {
     flexShrink: 0,
   },
 
-  // ── Date card
+  // ── Date
   dateCard: {
     background: "#ffffff",
     margin: "12px 12px 0",
@@ -393,12 +397,11 @@ const s = {
     padding: "12px 12px 0",
   },
 
-  // ── Worker card
+  // ── Card
   card: {
     borderRadius: "14px",
     border: "1.5px solid",
     padding: "14px",
-    transition: "border-color 0.2s, background 0.2s",
   },
   cardTop: {
     display: "flex",
@@ -428,8 +431,8 @@ const s = {
   },
   workerStatus: {
     fontSize: "12px",
-    marginTop: "3px",
     fontWeight: "500",
+    marginTop: "3px",
   },
   statusDot: {
     fontSize: "12px",
@@ -473,7 +476,7 @@ const s = {
     color: "#3C3489",
   },
 
-  // ── Advance input
+  // ── Advance
   advanceRow: {
     display: "flex",
     alignItems: "center",
@@ -499,7 +502,7 @@ const s = {
     boxSizing: "border-box",
   },
 
-  // ── Save section
+  // ── Save
   saveWrap: {
     padding: "14px 12px 0",
   },
@@ -524,7 +527,6 @@ const s = {
     fontSize: "16px",
     fontWeight: "600",
     cursor: "pointer",
-    letterSpacing: "0.02em",
     WebkitTapHighlightColor: "transparent",
   },
 };
