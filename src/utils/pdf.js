@@ -4,16 +4,16 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { ATTENDANCE_STATUS } from "./constants";
 
+// ── Helpers ─────────────────────────────────────────────────
 const fmtCurrency = (amount) =>
   `Rs.${Number(amount).toLocaleString("en-IN")}`;
 
-const fmtDate = (dateStr) => {
+const fmtDayDate = (dateStr) => {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  const day  = String(d.getDate()).padStart(2, "0");
+  const wday = d.toLocaleDateString("en-IN", { weekday: "short" });
+  const mon  = d.toLocaleDateString("en-IN", { month: "short" });
+  return `${day} ${mon}  (${wday})`;
 };
 
 const getMonthLabel = (dateStr) => {
@@ -22,89 +22,121 @@ const getMonthLabel = (dateStr) => {
 };
 
 const getAttendanceSymbol = (status) => {
-  if (status === ATTENDANCE_STATUS.FULL) return "P";
+  if (status === ATTENDANCE_STATUS.FULL)     return "P";
   if (status === ATTENDANCE_STATUS.OVERTIME) return "P+";
-  return "";   // absent = blank cell
+  return "";
 };
 
-// Group records by "Month Year" string, preserving sort order
+// Group records by month — sorted ASCENDING (day 1 first) within each month
 const groupByMonth = (records) => {
   const map = {};
-  records.forEach((r) => {
-    const key = getMonthLabel(r.date);
-    if (!map[key]) map[key] = [];
-    map[key].push(r);
-  });
+  [...records]
+    .sort((a, b) => new Date(a.date) - new Date(b.date)) // ← fix: ascending sort first
+    .forEach((r) => {
+      const key = getMonthLabel(r.date);
+      if (!map[key]) map[key] = [];
+      map[key].push(r);
+    });
   return map;
 };
 
+// ── Color constants ──────────────────────────────────────────
+const C = {
+  purple:      [83,  74,  183],   // #534AB7
+  purpleLight: [238, 237, 254],   // #EEEDFE
+  purpleDark:  [60,  52,  137],   // #3C3489
+  purpleMid:   [175, 169, 236],   // #AFA9EC
+  green:       [59,  109, 17 ],
+  greenLight:  [234, 243, 222],   // #EAF3DE
+  red:         [153, 60,  29 ],
+  redLight:    [250, 236, 231],   // #FAECE7
+  gray:        [160, 160, 160],
+  grayLight:   [245, 244, 254],   // off-white purple tint
+  grayBorder:  [220, 218, 245],
+  text:        [26,  26,  46 ],   // #1a1a2e
+  white:       [255, 255, 255],
+};
+
+// Draw a filled rounded rect (simulates rounded corners on section headers)
+const roundedRect = (doc, x, y, w, h, r, fillColor) => {
+  doc.setFillColor(...fillColor);
+  doc.roundedRect(x, y, w, h, r, r, "F");
+};
+
 export const generateWorkerPDF = (worker, summary, records) => {
-  const doc = new jsPDF();
+  const doc  = new jsPDF();
   const pageW = doc.internal.pageSize.getWidth();
-
-  // ── Helpers ────────────────────────────────────────────
-  const centerText = (text, y, size = 12, style = "normal") => {
-    doc.setFontSize(size);
-    doc.setFont("helvetica", style);
-    doc.text(text, pageW / 2, y, { align: "center" });
-  };
-
-  const labelValue = (label, value, x, y) => {
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(label, x, y);
-    doc.setFont("helvetica", "normal");
-    doc.text(value, x + doc.getTextWidth(label) + 2, y);
-  };
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const contentW = pageW - margin * 2;
 
   let y = 14;
 
-  // ── Header ─────────────────────────────────────────────
-  centerText("Worker Salary Report", y, 16, "bold");
-  y += 7;
+  // ── PAGE TITLE ───────────────────────────────────────────
+  roundedRect(doc, margin, y - 5, contentW, 14, 3, C.purple);
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.white);
+  doc.text("Worker Salary Report", pageW / 2, y + 4, { align: "center" });
+  doc.setTextColor(...C.text);
+  y += 16;
 
-  // Thin rule
-  doc.setDrawColor(200, 200, 200);
-  doc.setLineWidth(0.3);
-  doc.line(10, y, pageW - 10, y);
-  y += 6;
-
-  // Worker info row
+  // ── WORKER INFO CARD ─────────────────────────────────────
+  roundedRect(doc, margin, y, contentW, 22, 3, C.grayLight);
   doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.purpleDark);
+  doc.text("Name:", margin + 4, y + 7);
+  doc.text("Phone:", margin + 4, y + 14);
   doc.setFont("helvetica", "normal");
-  labelValue("Name: ", worker.name, 10, y);
-  labelValue("Phone: ", worker.phone || "N/A", 100, y);
-  y += 6;
-  labelValue("Wage per 8h: ", fmtCurrency(worker.wagePer8h), 10, y);
-  y += 5;
+  doc.setTextColor(...C.text);
+  doc.text(worker.name,            margin + 22, y + 7);
+  doc.text(worker.phone || "N/A",  margin + 22, y + 14);
 
-  doc.line(10, y, pageW - 10, y);
-  y += 7;
+  const wageLabel = "Wage / 8h:";
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.purpleDark);
+  doc.text(wageLabel, pageW / 2 + 4, y + 7);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...C.text);
+  doc.text(fmtCurrency(worker.wagePer8h), pageW / 2 + 28, y + 7);
+  y += 28;
 
-  // ── Summary block ──────────────────────────────────────
-  centerText("Summary", y, 12, "bold");
-  y += 6;
+  // ── SUMMARY TABLE ────────────────────────────────────────
+  // Section heading
+  roundedRect(doc, margin, y, contentW, 9, 2, C.purpleLight);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(...C.purpleDark);
+  doc.text("Summary", margin + 4, y + 6);
+  doc.setTextColor(...C.text);
+  y += 12;
 
-  // 2-column summary table
   autoTable(doc, {
     startY: y,
-    margin: { left: 10, right: 10 },
-    theme: "grid",
+    margin: { left: margin, right: margin },
+    theme: "plain",
     styles: {
       fontSize: 10,
-      cellPadding: 3,
+      cellPadding: { top: 3.5, bottom: 3.5, left: 5, right: 5 },
       font: "helvetica",
-      textColor: [30, 30, 30],
+      textColor: C.text,
+      lineColor: C.grayBorder,
+      lineWidth: 0.3,
     },
     headStyles: {
-      fillColor: [83, 74, 183],   // #534AB7 purple
-      textColor: [255, 255, 255],
+      fillColor: C.purple,
+      textColor: C.white,
       fontStyle: "bold",
       halign: "center",
+      fontSize: 10,
+    },
+    alternateRowStyles: {
+      fillColor: C.grayLight,
     },
     columnStyles: {
-      0: { halign: "left",  cellWidth: (pageW - 20) / 2 },
-      1: { halign: "right", cellWidth: (pageW - 20) / 2 },
+      0: { halign: "left",  cellWidth: contentW * 0.6 },
+      1: { halign: "right", cellWidth: contentW * 0.4 },
     },
     head: [["Particulars", "Value"]],
     body: [
@@ -115,102 +147,167 @@ export const generateWorkerPDF = (worker, summary, records) => {
       ["Total advance taken", fmtCurrency(summary.totalAdvance)],
       ["Remaining to pay",    fmtCurrency(summary.remaining)],
     ],
-    // Highlight the last row (remaining)
     didParseCell: (data) => {
-      if (data.row.index === 5) {
-        data.cell.styles.fontStyle = "bold";
-        data.cell.styles.fillColor = [238, 237, 254]; // #EEEDFE
-        data.cell.styles.textColor = [60, 52, 137];   // #3C3489
+      if (data.row.index === 5 && data.section === "body") {
+        data.cell.styles.fontStyle  = "bold";
+        data.cell.styles.fillColor  = C.purpleLight;
+        data.cell.styles.textColor  = C.purpleDark;
+        data.cell.styles.fontSize   = 11;
+      }
+      // Color total earned green
+      if (data.row.index === 3 && data.section === "body" && data.column.index === 1) {
+        data.cell.styles.textColor  = C.green;
+        data.cell.styles.fontStyle  = "bold";
+      }
+      // Color advance red
+      if (data.row.index === 4 && data.section === "body" && data.column.index === 1) {
+        data.cell.styles.textColor  = C.red;
+        data.cell.styles.fontStyle  = "bold";
       }
     },
+    // Draw rounded border around the whole summary table
+    didDrawPage: () => {},
   });
 
-  y = doc.lastAutoTable.finalY + 10;
+  y = doc.lastAutoTable.finalY + 12;
 
-  // ── Monthly attendance tables ──────────────────────────
+  // ── MONTHLY ATTENDANCE TABLES ─────────────────────────────
   const grouped = groupByMonth(records);
-  const months = Object.keys(grouped);
+  const months  = Object.keys(grouped);
 
   months.forEach((month) => {
     const monthRecords = grouped[month];
 
-    // Page break if not enough room for header + at least 3 rows
-    if (y > doc.internal.pageSize.getHeight() - 50) {
+    // Month totals
+    const presentCount = monthRecords.filter(
+      (r) => r.status !== ATTENDANCE_STATUS.ABSENT
+    ).length;
+    const monthAdvance = monthRecords.reduce((s, r) => s + (r.advance || 0), 0);
+
+    // Page break — needs room for heading + at least 5 rows
+    if (y > pageH - 60) {
       doc.addPage();
       y = 14;
     }
 
-    // Month heading centered
-    centerText(month, y, 11, "bold");
-    y += 5;
+    // Month heading pill
+    roundedRect(doc, margin, y, contentW, 10, 3, C.purple);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(...C.white);
+    doc.text(month, margin + 5, y + 6.5);
 
+    // Present count badge (right aligned)
+    const badge = `${presentCount} days present`;
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(...C.purpleLight);
+    doc.text(badge, pageW - margin - 5, y + 6.5, { align: "right" });
+    doc.setTextColor(...C.text);
+    y += 13;
+
+    // Build rows
     const tableRows = monthRecords.map((r) => [
-      fmtDate(r.date),
+      fmtDayDate(r.date),
       getAttendanceSymbol(r.status),
       r.advance > 0 ? fmtCurrency(r.advance) : "—",
     ]);
 
+    // Footer totals row
+    const footerRow = [
+      "Month total",
+      `${presentCount} days`,
+      monthAdvance > 0 ? fmtCurrency(monthAdvance) : "—",
+    ];
+
     autoTable(doc, {
       startY: y,
-      margin: { left: 10, right: 10 },
-      theme: "grid",
+      margin: { left: margin, right: margin },
+      theme: "plain",
       styles: {
         fontSize: 10,
-        cellPadding: 3,
+        cellPadding: { top: 3, bottom: 3, left: 5, right: 5 },
         font: "helvetica",
-        textColor: [30, 30, 30],
+        textColor: C.text,
+        lineColor: C.grayBorder,
+        lineWidth: 0.25,
       },
       headStyles: {
-        fillColor: [83, 74, 183],
-        textColor: [255, 255, 255],
+        fillColor: C.grayLight,
+        textColor: C.purpleDark,
         fontStyle: "bold",
-        halign: "center",
+        fontSize: 9.5,
+        lineColor: C.grayBorder,
+        lineWidth: 0.4,
+      },
+      alternateRowStyles: {
+        fillColor: [250, 249, 255],   // very faint purple tint on alternates
       },
       columnStyles: {
-        0: { halign: "left",   cellWidth: 80 },  // Date
-        1: { halign: "center", cellWidth: 40 },  // Attendance
-        2: { halign: "right",  cellWidth: (pageW - 20) - 120 }, // Advance
+        0: { halign: "left",   cellWidth: contentW * 0.46 },  // Date
+        1: { halign: "center", cellWidth: contentW * 0.24 },  // Attendance
+        2: { halign: "right",  cellWidth: contentW * 0.30 },  // Advance
       },
       head: [["Date", "Attendance", "Advance Taken"]],
       body: tableRows,
-      // Color P rows green, P+ purple, blank (absent) faint red
+      foot: [footerRow],
+      footStyles: {
+        fillColor: C.purpleLight,
+        textColor: C.purpleDark,
+        fontStyle: "bold",
+        fontSize: 9.5,
+        lineColor: C.purpleMid,
+        lineWidth: 0.4,
+      },
+      showFoot: "lastPage",
+      // Color P/P+/absent cells
       didParseCell: (data) => {
         if (data.section !== "body" || data.column.index !== 1) return;
         const val = data.cell.raw;
         if (val === "P") {
-          data.cell.styles.textColor = [59, 109, 17];   // green
-          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.textColor  = C.green;
+          data.cell.styles.fillColor  = C.greenLight;
+          data.cell.styles.fontStyle  = "bold";
         } else if (val === "P+") {
-          data.cell.styles.textColor = [60, 52, 137];   // purple
-          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.textColor  = C.purpleDark;
+          data.cell.styles.fillColor  = C.purpleLight;
+          data.cell.styles.fontStyle  = "bold";
         } else {
-          data.cell.styles.fillColor = [252, 235, 235]; // faint red bg for absent
+          // absent — faint red tint, no symbol
+          data.cell.styles.fillColor  = C.redLight;
+          data.cell.styles.textColor  = [200, 180, 180];
         }
       },
     });
 
-    y = doc.lastAutoTable.finalY + 10;
+    y = doc.lastAutoTable.finalY + 12;
   });
 
-  // ── Footer on every page ───────────────────────────────
+  // ── FOOTER ON EVERY PAGE ──────────────────────────────────
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 1; i <= totalPages; i++) {
     doc.setPage(i);
+
+    // Footer rule
+    doc.setDrawColor(...C.grayBorder);
+    doc.setLineWidth(0.3);
+    doc.line(margin, pageH - 10, pageW - margin, pageH - 10);
+
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(160, 160, 160);
+    doc.setTextColor(...C.gray);
     doc.text(
-      `${worker.name} — Generated on ${new Date().toLocaleDateString("en-IN")}`,
-      10,
-      doc.internal.pageSize.getHeight() - 6
+      `${worker.name}  —  Generated on ${new Date().toLocaleDateString("en-IN")}`,
+      margin,
+      pageH - 6
     );
     doc.text(
       `Page ${i} of ${totalPages}`,
-      pageW - 10,
-      doc.internal.pageSize.getHeight() - 6,
+      pageW - margin,
+      pageH - 6,
       { align: "right" }
     );
-    doc.setTextColor(30, 30, 30); // reset
+    doc.setTextColor(...C.text);
   }
 
   doc.save(`${worker.name}-report.pdf`);
