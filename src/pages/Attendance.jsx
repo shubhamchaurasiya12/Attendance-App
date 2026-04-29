@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   subscribeWorkers,
   subscribeAttendance,
@@ -13,16 +13,15 @@ export default function Attendance() {
   const [attendance, setAttendance] = useState([]);
   const [date, setDate] = useState(getTodayDate());
   const [draft, setDraft] = useState({});
-  const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
 
-  // 🔥 REALTIME WORKERS
+  const debounceTimers = useRef({});
+
   useEffect(() => {
     const unsub = subscribeWorkers(setWorkers);
     return () => unsub();
   }, []);
 
-  // 🔥 REALTIME ATTENDANCE
   useEffect(() => {
     const unsub = subscribeAttendance(setAttendance);
     return () => unsub();
@@ -30,402 +29,343 @@ export default function Attendance() {
 
   const activeWorkers = workers.filter((w) => w.isActive);
 
-  // 🔥 AUTO BUILD DRAFT FROM FIRESTORE
+  // Build draft – default to ABSENT
   useEffect(() => {
     const initial = {};
-
     activeWorkers.forEach((w) => {
       const existing = attendance.find(
         (a) => a.workerId === w.id && a.date === date
       );
-
       initial[w.id] = {
-        status: existing?.status || null,
-        advance: existing?.advance || 0,
+        status: existing?.status ?? ATTENDANCE_STATUS.ABSENT,
+        advance: existing?.advance ?? 0,
       };
     });
-
     setDraft(initial);
   }, [workers, attendance, date]);
 
+  const saveWorker = useCallback(
+    async (workerId, status, advance) => {
+      try {
+        const entry = createAttendanceEntry({ workerId, date, status, advance });
+        await upsertAttendance(entry);
+        setMessage("Saved");
+        setTimeout(() => setMessage(""), 1000);
+      } catch (err) {
+        console.error(err);
+        setMessage("Save failed");
+        setTimeout(() => setMessage(""), 1500);
+      }
+    },
+    [date]
+  );
+
+  const debouncedSave = useCallback(
+    (workerId, status, advance) => {
+      if (debounceTimers.current[workerId]) clearTimeout(debounceTimers.current[workerId]);
+      debounceTimers.current[workerId] = setTimeout(() => {
+        saveWorker(workerId, status, advance);
+        delete debounceTimers.current[workerId];
+      }, 500);
+    },
+    [saveWorker]
+  );
+
   const setStatus = (workerId, status) => {
-    setDraft((prev) => ({
-      ...prev,
-      [workerId]: { ...prev[workerId], status },
-    }));
+    setDraft((prev) => {
+      const newDraft = { ...prev, [workerId]: { ...prev[workerId], status } };
+      debouncedSave(workerId, status, newDraft[workerId].advance);
+      return newDraft;
+    });
   };
 
   const setAdvance = (workerId, value) => {
-    setDraft((prev) => ({
-      ...prev,
-      [workerId]: {
-        ...prev[workerId],
-        advance: Number(value) || 0,
-      },
-    }));
-  };
-
-  const isUnmarked = (workerId) => !draft[workerId]?.status;
-
-  const unmarkedCount = activeWorkers.filter((w) =>
-    isUnmarked(w.id)
-  ).length;
-
-  const showMessage = (text) => {
-    setMessage(text);
-    setTimeout(() => setMessage(""), 1500);
-  };
-
-  // 🔥 SAVE DIRECTLY TO FIRESTORE
-  const handleSave = async () => {
-    if (isSaving) return;
-    if (!confirm("Save attendance?")) return;
-
-    setIsSaving(true);
-
-    try {
-      await Promise.all(
-        activeWorkers.map((w) => {
-          const entry = createAttendanceEntry({
-            workerId: w.id,
-            date,
-            status:
-              draft[w.id]?.status ||
-              ATTENDANCE_STATUS.ABSENT,
-            advance: draft[w.id]?.advance,
-          });
-
-          return upsertAttendance(entry);
-        })
-      );
-
-      showMessage("Saved!");
-    } catch (err) {
-      console.error(err);
-      showMessage("Save failed");
-    }
-
-    setTimeout(() => setIsSaving(false), 1500);
+    const numericValue = Number(value) || 0;
+    setDraft((prev) => {
+      const newDraft = { ...prev, [workerId]: { ...prev[workerId], advance: numericValue } };
+      debouncedSave(workerId, newDraft[workerId].status, numericValue);
+      return newDraft;
+    });
   };
 
   return (
-    <div style={s.page}>
-      <div style={s.container}>
-        {/* Header */}
-        <div style={s.header}>
-          <div>
-            <h1 style={s.heading}>Attendance</h1>
-            <p style={s.subHeading}>
-              {unmarkedCount > 0
-                ? `${unmarkedCount} worker${unmarkedCount !== 1 ? "s" : ""} not marked`
-                : "All workers marked"}
-            </p>
-          </div>
-          <div style={s.dateWrapper}>
-            <label style={s.dateLabel}>Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={s.dateInput}
-            />
-          </div>
-        </div>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'DM Sans', sans-serif; background: #F5F4F0; }
 
-        {/* Toast message */}
-        {message && <div style={s.toast}>{message}</div>}
+        .att-page {
+          min-height: 100dvh;
+          padding: 0 0 env(safe-area-inset-bottom, 24px);
+          font-family: 'DM Sans', sans-serif;
+          background: #F5F4F0;
+          color: #1A1A1A;
+        }
+        .att-inner {
+          max-width: 600px;
+          margin: 0 auto;
+          padding: 0 16px 32px;
+        }
 
-        {/* Workers list */}
-        {activeWorkers.length === 0 ? (
-          <div style={s.emptyState}>
-            <span style={s.emptyIcon}>👷</span>
-            <p>No active workers</p>
+        /* top card (sticky) */
+        .att-topbar {
+          position: sticky;
+          top: 12px;
+          z-index: 10;
+          margin: 0 0 20px 0;
+        }
+        .att-card {
+          background: #FFFFFF;
+          border-radius: 24px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+          padding: 20px 16px;
+        }
+        .att-title {
+          font-size: 26px;
+          font-weight: 600;
+          letter-spacing: -0.5px;
+          margin-bottom: 4px;
+        }
+        .att-sub {
+          font-size: 13px;
+          color: #6B7280;
+          margin-bottom: 16px;
+        }
+        .att-date-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .att-date-label {
+          font-size: 13px;
+          font-weight: 500;
+          color: #6B7280;
+        }
+        .att-date-input {
+          flex: 1;
+          background: #F9F9F8;
+          border: 1.5px solid #E5E5E5;
+          border-radius: 14px;
+          padding: 10px 14px;
+          font-size: 14px;
+          font-family: 'DM Sans', sans-serif;
+          outline: none;
+        }
+        .att-date-input:focus {
+          border-color: #A3A3A3;
+          background: #fff;
+        }
+
+        /* toast fixed */
+        .att-toast {
+          position: fixed;
+          top: 20px;
+          right: 20px;
+          background: #1e293b;
+          color: #fff;
+          padding: 10px 20px;
+          border-radius: 40px;
+          font-size: 14px;
+          z-index: 1000;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+          pointer-events: none;
+        }
+
+        /* worker card (same design as Workers page) */
+        .att-worker-card {
+          background: #fff;
+          border-radius: 20px;
+          padding: 12px 16px;
+          margin-bottom: 12px;
+          border: 1.5px solid #F0F0F0;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          transition: transform .12s;
+        }
+        .att-worker-card:active {
+          transform: scale(.985);
+        }
+        .att-worker-name {
+          flex: 1;
+          font-weight: 500;
+          font-size: 15px;
+          color: #1A1A1A;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          min-width: 0;
+        }
+        .att-status-buttons {
+          display: flex;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+        .att-circle-btn {
+          width: 44px;
+          height: 44px;
+          border-radius: 44px;
+          border: 1.5px solid #E5E5E5;
+          background: #fff;
+          font-size: 16px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .att-circle-btn:active {
+          transform: scale(0.96);
+        }
+        .att-advance-input {
+          width: 90px;
+          background: #F9F9F8;
+          border: 1.5px solid #E5E5E5;
+          border-radius: 40px;
+          padding: 10px 8px;
+          font-size: 14px;
+          font-family: 'DM Sans', sans-serif;
+          text-align: center;
+          outline: none;
+          flex-shrink: 0;
+        }
+        .att-advance-input:focus {
+          border-color: #A3A3A3;
+          background: #fff;
+        }
+        .att-empty {
+          text-align: center;
+          padding: 48px 0;
+          color: #9CA3AF;
+        }
+        .att-empty-icon {
+          font-size: 36px;
+          margin-bottom: 12px;
+        }
+
+        /* responsive */
+        @media (max-width: 480px) {
+          .att-card {
+            padding: 16px;
+          }
+          .att-title {
+            font-size: 22px;
+          }
+          .att-date-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+          .att-worker-card {
+            padding: 10px 12px;
+            gap: 8px;
+          }
+          .att-circle-btn {
+            width: 38px;
+            height: 38px;
+            font-size: 14px;
+          }
+          .att-advance-input {
+            width: 70px;
+            font-size: 13px;
+            padding: 8px 4px;
+          }
+          .att-worker-name {
+            font-size: 14px;
+          }
+        }
+      `}</style>
+
+      <div className="att-page">
+        <div className="att-inner">
+          {/* Sticky top card with date picker */}
+          <div className="att-topbar">
+            <div className="att-card">
+              <h1 className="att-title">Attendance</h1>
+              <p className="att-sub">Mark daily attendance</p>
+              <div className="att-date-row">
+                <span className="att-date-label">Date</span>
+                <input
+                  type="date"
+                  className="att-date-input"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-        ) : (
-          <div style={s.listContainer}>
-            {activeWorkers.map((w) => {
-              const current = draft[w.id] || {};
+
+          {/* Toast message */}
+          {message && <div className="att-toast">{message}</div>}
+
+          {/* Workers list */}
+          {activeWorkers.length === 0 ? (
+            <div className="att-empty">
+              <div className="att-empty-icon">👷</div>
+              <p>No active workers</p>
+            </div>
+          ) : (
+            activeWorkers.map((w) => {
+              const current = draft[w.id] || { status: ATTENDANCE_STATUS.ABSENT, advance: 0 };
               const selectedStatus = current.status;
 
               return (
-                <div key={w.id} style={s.card}>
-                  <div style={s.cardHeader}>
-                    <strong style={s.workerName}>{w.name}</strong>
-                    {selectedStatus && (
-                      <span style={s.statusBadge}>
-                        {selectedStatus === ATTENDANCE_STATUS.FULL && "8h"}
-                        {selectedStatus === ATTENDANCE_STATUS.OVERTIME && "12h"}
-                        {selectedStatus === ATTENDANCE_STATUS.ABSENT && "Absent"}
-                      </span>
-                    )}
+                <div key={w.id} className="att-worker-card">
+                  <div className="att-worker-name" title={w.name}>
+                    {w.name}
                   </div>
-
-                  <div style={s.statusButtons}>
+                  <div className="att-status-buttons">
                     <button
+                      className="att-circle-btn"
                       onClick={() => setStatus(w.id, ATTENDANCE_STATUS.ABSENT)}
                       style={{
-                        ...s.statusBtn,
-                        background: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#f1f5f9" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#cbd5e1" : "#e2e8f0",
-                        color: "#1e293b",
+                        background: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#fee2e2" : "#fff",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#f87171" : "#E5E5E5",
+                        color: "#b91c1c",
                       }}
                     >
-                      Absent
+                      A
                     </button>
                     <button
+                      className="att-circle-btn"
                       onClick={() => setStatus(w.id, ATTENDANCE_STATUS.FULL)}
                       style={{
-                        ...s.statusBtn,
-                        background: selectedStatus === ATTENDANCE_STATUS.FULL ? "#e0e7ff" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.FULL ? "#a5b4fc" : "#e2e8f0",
-                        color: selectedStatus === ATTENDANCE_STATUS.FULL ? "#4338ca" : "#1e293b",
+                        background: selectedStatus === ATTENDANCE_STATUS.FULL ? "#dcfce7" : "#fff",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.FULL ? "#4ade80" : "#E5E5E5",
+                        color: "#166534",
                       }}
                     >
-                      8h
+                      P
                     </button>
                     <button
+                      className="att-circle-btn"
                       onClick={() => setStatus(w.id, ATTENDANCE_STATUS.OVERTIME)}
                       style={{
-                        ...s.statusBtn,
-                        background: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#fef3c7" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#fcd34d" : "#e2e8f0",
-                        color: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#b45309" : "#1e293b",
+                        background: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#fef9c3" : "#fff",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#facc15" : "#E5E5E5",
+                        color: "#854d0e",
                       }}
                     >
-                      12h
+                      P+
                     </button>
                   </div>
-
-                  <div style={s.advanceField}>
-                    <label style={s.advanceLabel}>Advance (₹)</label>
-                    <input
-                      type="number"
-                      placeholder="0"
-                      value={current.advance || ""}
-                      onChange={(e) => setAdvance(w.id, e.target.value)}
-                      style={s.advanceInput}
-                    />
-                  </div>
+                  <input
+                    type="number"
+                    placeholder="₹"
+                    className="att-advance-input"
+                    value={current.advance || ""}
+                    onChange={(e) => setAdvance(w.id, e.target.value)}
+                  />
                 </div>
               );
-            })}
-          </div>
-        )}
-
-        {/* Save button */}
-        {activeWorkers.length > 0 && (
-          <div style={s.footer}>
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              style={{
-                ...s.saveBtn,
-                opacity: isSaving ? 0.6 : 1,
-              }}
-            >
-              {isSaving ? "Saving..." : "Save attendance"}
-            </button>
-          </div>
-        )}
+            })
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
-}
-
-// 🎨 Clean, minimal styling
-const s = {
-  page: {
-    background: "#f8fafc",
-    minHeight: "100vh",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-  },
-  container: {
-    maxWidth: "720px",
-    margin: "0 auto",
-    padding: "32px 24px",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: "32px",
-    flexWrap: "wrap",
-    gap: "20px",
-  },
-  heading: {
-    fontSize: "28px",
-    fontWeight: "600",
-    color: "#0f172a",
-    letterSpacing: "-0.01em",
-    margin: "0 0 6px 0",
-  },
-  subHeading: {
-    fontSize: "14px",
-    color: "#475569",
-    margin: 0,
-  },
-  dateWrapper: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-  dateLabel: {
-    fontSize: "12px",
-    fontWeight: "500",
-    color: "#64748b",
-    letterSpacing: "0.3px",
-  },
-  dateInput: {
-    padding: "8px 12px",
-    border: "1px solid #e2e8f0",
-    borderRadius: "40px",
-    fontSize: "14px",
-    fontFamily: "inherit",
-    background: "#fff",
-    outline: "none",
-    transition: "all 0.2s",
-  },
-  toast: {
-    background: "#1e293b",
-    color: "#fff",
-    padding: "10px 20px",
-    borderRadius: "40px",
-    fontSize: "14px",
-    textAlign: "center",
-    marginBottom: "24px",
-    width: "fit-content",
-    marginLeft: "auto",
-    marginRight: "auto",
-  },
-  emptyState: {
-    textAlign: "center",
-    padding: "48px 24px",
-    background: "#fff",
-    borderRadius: "24px",
-    border: "1px solid #f1f5f9",
-    color: "#64748b",
-  },
-  emptyIcon: {
-    fontSize: "48px",
-    display: "block",
-    marginBottom: "16px",
-    opacity: 0.7,
-  },
-  listContainer: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "16px",
-  },
-  card: {
-    background: "#fff",
-    borderRadius: "24px",
-    padding: "20px",
-    border: "1px solid #f0f2f5",
-    boxShadow: "0 1px 2px rgba(0, 0, 0, 0.02)",
-    transition: "all 0.2s",
-  },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "18px",
-  },
-  workerName: {
-    fontSize: "18px",
-    fontWeight: "600",
-    color: "#0f172a",
-  },
-  statusBadge: {
-    fontSize: "12px",
-    fontWeight: "500",
-    background: "#f1f5f9",
-    padding: "4px 10px",
-    borderRadius: "30px",
-    color: "#334155",
-  },
-  statusButtons: {
-    display: "flex",
-    gap: "10px",
-    marginBottom: "20px",
-    flexWrap: "wrap",
-  },
-  statusBtn: {
-    flex: 1,
-    padding: "8px 12px",
-    border: "1px solid #e2e8f0",
-    borderRadius: "40px",
-    fontSize: "14px",
-    fontWeight: "500",
-    cursor: "pointer",
-    transition: "all 0.2s",
-    background: "#fff",
-    textAlign: "center",
-  },
-  advanceField: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    flexWrap: "wrap",
-  },
-  advanceLabel: {
-    fontSize: "13px",
-    fontWeight: "500",
-    color: "#475569",
-  },
-  advanceInput: {
-    flex: 1,
-    padding: "8px 12px",
-    border: "1px solid #e2e8f0",
-    borderRadius: "24px",
-    fontSize: "14px",
-    fontFamily: "inherit",
-    outline: "none",
-    transition: "all 0.2s",
-  },
-  footer: {
-    marginTop: "40px",
-    display: "flex",
-    justifyContent: "flex-end",
-  },
-  saveBtn: {
-    background: "#4f46e5",
-    color: "#fff",
-    border: "none",
-    borderRadius: "40px",
-    padding: "12px 28px",
-    fontSize: "15px",
-    fontWeight: "500",
-    cursor: "pointer",
-    transition: "all 0.2s",
-    width: "100%",
-    maxWidth: "200px",
-  },
-};
-
-// Add interactive hover/focus styles dynamically
-const addStyles = () => {
-  const styleSheet = document.createElement("style");
-  styleSheet.textContent = `
-    button, input[type="date"], input[type="number"] {
-      transition: all 0.2s ease;
-    }
-    button:hover:not(:disabled) {
-      transform: translateY(-1px);
-      filter: brightness(0.96);
-    }
-    input:focus, input[type="date"]:focus, input[type="number"]:focus {
-      border-color: #a5b4fc !important;
-      box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
-    }
-    div[style*="border-radius: 24px"]:hover {
-      border-color: #e2e8f0;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-    }
-  `;
-  document.head.appendChild(styleSheet);
-};
-
-if (typeof document !== "undefined") {
-  addStyles();
 }
