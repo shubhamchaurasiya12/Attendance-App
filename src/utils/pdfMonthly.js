@@ -2,11 +2,12 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { buildWorkerMonthlyTable } from "./reportTable";
 
-// ── COLUMN WIDTH CALCULATION ─────────────────────
 const getColumnStyles = (days) => {
-  const firstColWidth = 28;
-  const remainingWidth = 277 - firstColWidth; // A4 landscape usable width
-  const perDayWidth = remainingWidth / days;
+  const firstColWidth = 30;
+
+  // 🔥 More realistic width calculation
+  const usableWidth = 277 - firstColWidth;
+  const perDay = usableWidth / days;
 
   const styles = {
     0: { cellWidth: firstColWidth, halign: "left" },
@@ -14,7 +15,7 @@ const getColumnStyles = (days) => {
 
   for (let i = 1; i <= days; i++) {
     styles[i] = {
-      cellWidth: perDayWidth,
+      cellWidth: perDay,
       halign: "center",
     };
   }
@@ -22,7 +23,6 @@ const getColumnStyles = (days) => {
   return styles;
 };
 
-// ── MAIN FUNCTION ───────────────────────────────
 export const generateMonthlyPDF = (
   workers,
   attendance,
@@ -42,7 +42,7 @@ export const generateMonthlyPDF = (
 
   let startY = margin + 5;
 
-  // ── HEADER ───────────────────────────────────
+  // HEADER
   doc.setFontSize(16);
   doc.setFont("helvetica", "bold");
   doc.text(
@@ -54,26 +54,25 @@ export const generateMonthlyPDF = (
 
   startY += 10;
 
-  workers.forEach((worker, index) => {
+  workers.forEach((worker) => {
     const { datesRow, statusRow, advanceRow } =
       buildWorkerMonthlyTable(worker, attendance, year, month);
 
     const days = datesRow.length;
 
-    // 🔥 Page break BEFORE drawing
+    // PAGE BREAK
     if (startY > pageH - 60) {
       doc.addPage();
       startY = margin + 10;
     }
 
-    // ── Worker Name ───────────────────────────
+    // Worker name
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
     doc.text(`Worker: ${worker.name}`, margin, startY);
 
-    startY += 4;
+    startY += 5;
 
-    // ── TABLE ─────────────────────────────────
     autoTable(doc, {
       startY,
       margin: { left: margin, right: margin },
@@ -82,17 +81,16 @@ export const generateMonthlyPDF = (
       theme: "grid",
 
       styles: {
-        fontSize: 7.5,
-        cellPadding: { top: 2, bottom: 2, left: 1.5, right: 1.5 },
+        fontSize: 6.8, // 🔥 reduced slightly (fix overflow)
+        cellPadding: { top: 2.5, bottom: 2.5, left: 1.2, right: 1.2 },
         valign: "middle",
         halign: "center",
-        overflow: "ellipsize", // 🔥 prevents overflow
-        lineWidth: 0.2,
+
+        overflow: "linebreak", // 🔥 KEY FIX (no cropping)
       },
 
       headStyles: {
         fillColor: [245, 245, 245],
-        textColor: [40, 40, 40],
         fontStyle: "bold",
       },
 
@@ -102,7 +100,14 @@ export const generateMonthlyPDF = (
 
       body: [
         ["Attendance", ...statusRow],
-        ["Advance", ...advanceRow],
+
+        // 🔥 ADVANCE ROW FIXED
+        [
+          "Advance",
+          ...advanceRow.map((v) =>
+            v === "-" ? "-" : String(v)
+          ),
+        ],
       ],
 
       didParseCell: (data) => {
@@ -123,7 +128,7 @@ export const generateMonthlyPDF = (
           data.cell.styles.textColor = [200, 0, 0];
         }
 
-        // Advance color
+        // Advance styling (IMPORTANT)
         if (!isNaN(val) && val !== "" && val !== "-") {
           data.cell.styles.textColor = [153, 60, 29];
           data.cell.styles.fontStyle = "bold";
@@ -131,11 +136,11 @@ export const generateMonthlyPDF = (
       },
     });
 
-    // 🔥 Proper spacing between workers
-    startY = doc.lastAutoTable.finalY + 12;
+    // spacing
+    startY = doc.lastAutoTable.finalY + 14;
   });
 
-  // ── FOOTER (PAGE NUMBER) ─────────────────────
+  // FOOTER
   const totalPages = doc.internal.getNumberOfPages();
 
   for (let i = 1; i <= totalPages; i++) {
