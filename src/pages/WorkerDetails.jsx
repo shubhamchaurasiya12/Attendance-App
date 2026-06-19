@@ -16,16 +16,15 @@ export default function WorkerDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [workers, setWorkers]       = useState([]);
+  const [workers, setWorkers] = useState([]);
   const [attendance, setAttendance] = useState([]);
-  const [worker, setWorker]         = useState(null);
-  const [records, setRecords]       = useState([]);
-  const [summary, setSummary]       = useState(null);
+  const [worker, setWorker] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [summary, setSummary] = useState(null);
 
-  // Month picker state – defaults to current month
   const today = new Date();
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth());
-  const [selectedYear, setSelectedYear]   = useState(today.getFullYear());
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear());
 
   useEffect(() => {
     const unsub = subscribeWorkers(setWorkers);
@@ -53,17 +52,15 @@ export default function WorkerDetails() {
     setSummary(result);
   }, [id, workers, attendance]);
 
-  // Filter records by selected month/year
   const filteredRecords = records.filter((r) => {
     const d = new Date(r.date);
     return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
   });
 
-  // Group filtered records by month (but only one month, so just one group)
   const groupByMonth = (recs) => {
     const map = {};
     recs.forEach((r) => {
-      const d   = new Date(r.date);
+      const d = new Date(r.date);
       const key = d.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
       if (!map[key]) map[key] = [];
       map[key].push(r);
@@ -75,12 +72,12 @@ export default function WorkerDetails() {
   };
 
   const grouped = groupByMonth(filteredRecords);
-  const months  = Object.keys(grouped); // will be 0 or 1 month
+  const months = Object.keys(grouped);
 
   const attendanceSymbol = (status) => {
-    if (status === ATTENDANCE_STATUS.FULL)     return { symbol: "P",  color: "#166534", bg: "#dcfce7" };
+    if (status === ATTENDANCE_STATUS.FULL) return { symbol: "P", color: "#166534", bg: "#dcfce7" };
     if (status === ATTENDANCE_STATUS.OVERTIME) return { symbol: "P+", color: "#854d0e", bg: "#fef9c3" };
-    if (status === ATTENDANCE_STATUS.ABSENT)   return { symbol: "—",  color: "#9CA3AF", bg: "#F3F4F6" };
+    if (status === ATTENDANCE_STATUS.ABSENT) return { symbol: "—", color: "#9CA3AF", bg: "#F3F4F6" };
     return { symbol: "—", color: "#9CA3AF", bg: "#F3F4F6" };
   };
 
@@ -91,7 +88,6 @@ export default function WorkerDetails() {
 
   const handleDownloadPDF = () => {
     if (!worker || !summary) return;
-    // Full attendance history (all months)
     generateWorkerPDF(worker, summary, records);
   };
 
@@ -113,56 +109,67 @@ export default function WorkerDetails() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'DM Sans', sans-serif; background: #F5F4F0; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Inter', sans-serif;
+          background: #0B0B16;
+          -webkit-font-smoothing: antialiased;
+        }
       `}</style>
 
       <div style={s.page}>
-        {/* Sticky header */}
+        {/* ─── DARK HEADER ─── */}
         <div style={s.header}>
-          <button onClick={() => navigate(-1)} style={s.backIconBtn}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path d="M15 19l-7-7 7-7" stroke="#1A1A1A" strokeWidth="2"
-                strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+          <div style={s.headerGlow} />
+          <div style={s.headerInner}>
+            <button onClick={() => navigate(-1)} style={s.backIconBtn}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M15 19l-7-7 7-7" stroke="#FFFFFF" strokeWidth="2.2"
+                  strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
 
-          <div style={s.headerCenter}>
-            <div style={s.avatar}>{getInitials(worker.name)}</div>
-            <div style={{ minWidth: 0 }}>
-              <p style={s.workerName}>{worker.name}</p>
-              <p style={s.workerPhone}>{worker.phone || "No phone"}</p>
+            <div style={s.avatarContainer}>
+              <div style={s.avatar}>{getInitials(worker.name)}</div>
+              <div style={s.nameGroup}>
+                <p style={s.workerName}>{worker.name}</p>
+                <p style={s.workerPhone}>{worker.phone || "No phone"}</p>
+              </div>
+            </div>
+
+            <div style={s.wagePill}>
+              ₹{Number(worker.wagePer8h).toLocaleString("en-IN")}
+              <span style={s.wageSub}>/8h</span>
             </div>
           </div>
 
-          <div style={s.wagePill}>
-            ₹{Number(worker.wagePer8h).toLocaleString("en-IN")}
-            <span style={s.wageSub}>/8h</span>
-          </div>
+          {/* Quick stats pills */}
+          {summary && (
+            <div style={s.quickStats}>
+              <span style={s.quickStat}>
+                <span style={{ ...s.quickDot, background: "#22C55E" }} />
+                Full {summary.fullDays}
+              </span>
+              <span style={s.quickStat}>
+                <span style={{ ...s.quickDot, background: "#F59E0B" }} />
+                OT {summary.overtimeDays}
+              </span>
+              <span style={s.quickStat}>
+                <span style={{ ...s.quickDot, background: "#9CA3AF" }} />
+                Abs {summary.absentDays}
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Scrollable body */}
-        <div style={s.body}>
+        {/* ─── FLOATING WHITE PANEL ─── */}
+        <div style={s.panel}>
+          <div style={s.handle} />
+
           {summary && (
             <>
-              {/* Metrics row (all‑time) */}
-              <div style={s.metricsGrid}>
-                <div style={s.metricCard}>
-                  <p style={s.metricLabel}>Full days</p>
-                  <p style={{ ...s.metricValue, color: "#166534" }}>{summary.fullDays}</p>
-                </div>
-                <div style={s.metricCard}>
-                  <p style={s.metricLabel}>Overtime</p>
-                  <p style={{ ...s.metricValue, color: "#854d0e" }}>{summary.overtimeDays}</p>
-                </div>
-                <div style={s.metricCard}>
-                  <p style={s.metricLabel}>Absent</p>
-                  <p style={{ ...s.metricValue, color: "#9CA3AF" }}>{summary.absentDays}</p>
-                </div>
-              </div>
-
-              {/* Earnings card (all‑time) */}
+              {/* Earnings card */}
               <div style={s.earningsCard}>
                 <div style={s.earningsRow}>
                   <div style={s.earningsItem}>
@@ -171,7 +178,7 @@ export default function WorkerDetails() {
                       ₹{Number(summary.totalEarned).toLocaleString("en-IN")}
                     </p>
                   </div>
-                  <div style={s.earningsDivider}/>
+                  <div style={s.earningsDivider} />
                   <div style={s.earningsItem}>
                     <p style={s.earningsLabel}>Advance given</p>
                     <p style={{ ...s.earningsValue, color: "#b91c1c" }}>
@@ -180,69 +187,65 @@ export default function WorkerDetails() {
                   </div>
                 </div>
                 <div style={s.remainingRow}>
-                  <p style={s.remainingLabel}>Remaining to pay</p>
-                  <p style={s.remainingValue}>
+                  <span style={s.remainingLabel}>Remaining to pay</span>
+                  <span style={s.remainingValue}>
                     ₹{Number(summary.remaining).toLocaleString("en-IN")}
-                  </p>
+                  </span>
                 </div>
               </div>
 
               {/* Action buttons */}
               <div style={s.actionRow}>
                 <button style={s.whatsappBtn} onClick={handleShare}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                    style={{ marginRight: "7px", flexShrink: 0 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ marginRight: "7px", flexShrink: 0 }}>
                     <path fillRule="evenodd" clipRule="evenodd"
                       d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.978-1.418A9.96 9.96 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z"
                       fill="#25D366"/>
                     <path d="M8.5 8.5c.2-.5.7-1 1.2-1 .3 0 .5.1.7.5l.8 2c.1.3 0 .6-.2.8l-.5.5c.5 1 1.4 1.9 2.4 2.4l.5-.5c.2-.2.5-.3.8-.2l2 .8c.4.2.5.4.5.7 0 .5-.5 1-1 1.2-2.5 1-6-2.5-5-5z"
                       fill="#fff"/>
                   </svg>
-                  Share on WhatsApp
+                  Share
                 </button>
 
                 <button style={s.pdfBtn} onClick={handleDownloadPDF}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                    style={{ marginRight: "7px", flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ marginRight: "7px", flexShrink: 0 }}>
                     <path d="M12 16l-4-4h2.5V4h3v8H16l-4 4z" fill="#1A1A1A"/>
                     <path d="M4 18h16v2H4v-2z" fill="#1A1A1A"/>
                   </svg>
-                  Download PDF
+                  PDF
                 </button>
               </div>
             </>
           )}
 
-          {/* Month picker + attendance list */}
+          {/* Attendance history */}
           <div style={s.historySection}>
             <div style={s.historyHeader}>
-              <p style={s.sectionTitle}>Attendance history</p>
-              <div style={s.monthPickerWrapper}>
-                <input
-                  type="month"
-                  className="month-input"
-                  value={`${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`}
-                  onChange={(e) => {
-                    const [y, m] = e.target.value.split("-");
-                    setSelectedYear(Number(y));
-                    setSelectedMonth(Number(m) - 1);
-                  }}
-                  style={s.monthPicker}
-                />
-              </div>
+              <p style={s.sectionTitle}>Attendance</p>
+              <input
+                type="month"
+                className="month-input"
+                value={`${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`}
+                onChange={(e) => {
+                  const [y, m] = e.target.value.split("-");
+                  setSelectedYear(Number(y));
+                  setSelectedMonth(Number(m) - 1);
+                }}
+                style={s.monthPicker}
+              />
             </div>
 
             {filteredRecords.length === 0 ? (
               <div style={s.emptyState}>
                 <div style={s.emptyIcon}>📅</div>
-                <p style={s.emptyTitle}>No records for this month</p>
-                <p style={s.emptyHint}>Select another month or mark attendance</p>
+                <p style={s.emptyTitle}>No records</p>
+                <p style={s.emptyHint}>Select another month</p>
               </div>
             ) : (
               <div style={s.monthsWrap}>
                 {months.map((month) => {
                   const monthRecords = grouped[month];
-                  const monthEarned  = monthRecords.reduce((sum, r) => sum + calculateDailyEarning(r.status, worker.wagePer8h), 0);
+                  const monthEarned = monthRecords.reduce((sum, r) => sum + calculateDailyEarning(r.status, worker.wagePer8h), 0);
                   const monthAdvance = monthRecords.reduce((sum, r) => sum + (r.advance || 0), 0);
 
                   return (
@@ -250,16 +253,16 @@ export default function WorkerDetails() {
                       <div style={s.monthHeader}>
                         <span style={s.monthTitle}>{month}</span>
                         <span style={s.monthPresentCount}>
-                          {monthRecords.filter(r => r.status !== ATTENDANCE_STATUS.ABSENT).length} days present
+                          {monthRecords.filter(r => r.status !== ATTENDANCE_STATUS.ABSENT).length} present
                         </span>
                       </div>
 
                       <div style={s.dayList}>
                         {monthRecords.map((r) => {
-                          const d    = new Date(r.date);
-                          const day  = d.getDate();
+                          const d = new Date(r.date);
+                          const day = d.getDate();
                           const wday = d.toLocaleDateString("en-IN", { weekday: "short" });
-                          const sym  = attendanceSymbol(r.status);
+                          const sym = attendanceSymbol(r.status);
 
                           return (
                             <div key={r.date} style={s.dayRow}>
@@ -268,11 +271,7 @@ export default function WorkerDetails() {
                                 <span style={s.dayName}>{wday}</span>
                               </div>
                               <div style={s.badgeBlock}>
-                                <span style={{
-                                  ...s.attendanceBadge,
-                                  background: sym.bg,
-                                  color: sym.color,
-                                }}>
+                                <span style={{ ...s.attendanceBadge, background: sym.bg, color: sym.color }}>
                                   {sym.symbol}
                                 </span>
                               </div>
@@ -289,16 +288,14 @@ export default function WorkerDetails() {
                       </div>
 
                       <div style={s.monthFooter}>
-                        <div style={s.footerLeft}>
-                          <span style={s.footerLabel}>Month total</span>
-                        </div>
+                        <span style={s.footerLabel}>Month total</span>
                         <div style={s.footerRight}>
                           <span style={s.footerEarned}>₹{Number(monthEarned).toLocaleString("en-IN")}</span>
                           <span style={s.footerDivider}>·</span>
                           {monthAdvance > 0 ? (
-                            <span style={s.footerAdvance}>₹{Number(monthAdvance).toLocaleString("en-IN")} advance</span>
+                            <span style={s.footerAdvance}>₹{Number(monthAdvance).toLocaleString("en-IN")} adv.</span>
                           ) : (
-                            <span style={s.advanceNil}>no advance</span>
+                            <span style={s.advanceNil}>no adv.</span>
                           )}
                         </div>
                       </div>
@@ -314,90 +311,107 @@ export default function WorkerDetails() {
   );
 }
 
-// 🎨 Styles – added month picker styling
+// ─── Styles ──────────────────────────────────────────────────
 const s = {
   page: {
+    minHeight: "100dvh",
+    background: "#0B0B16",
+    fontFamily: "'Inter', sans-serif",
     display: "flex",
     flexDirection: "column",
-    height: "100vh",
-    background: "#F5F4F0",
-    fontFamily: "'DM Sans', sans-serif",
     overflow: "hidden",
   },
-  body: {
-    flex: 1,
-    overflowY: "auto",
-    overflowX: "hidden",
-    WebkitOverflowScrolling: "touch",
-    padding: "0 0 20px 0",
-  },
+
+  // Dark header
   header: {
+    background: "#0B0B16",
+    padding: "40px 20px 28px",
+    position: "relative",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  headerGlow: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "radial-gradient(ellipse 340px 240px at 90% -10%, rgba(111,107,255,0.22) 0%, transparent 70%)," +
+      "radial-gradient(ellipse 220px 200px at -10% 80%, rgba(138,135,255,0.12) 0%, transparent 70%)",
+    pointerEvents: "none",
+  },
+  headerInner: {
+    maxWidth: "600px",
+    margin: "0 auto",
+    position: "relative",
+    zIndex: 1,
     display: "flex",
     alignItems: "center",
     gap: "12px",
-    padding: "12px 16px",
-    background: "#FFFFFF",
-    borderBottom: "1px solid #F0F0F0",
-    flexShrink: 0,
-    position: "sticky",
-    top: 0,
-    zIndex: 10,
   },
   backIconBtn: {
-    width: "36px",
-    height: "36px",
-    minWidth: "36px",
+    width: "40px",
+    height: "40px",
+    minWidth: "40px",
     borderRadius: "50%",
-    border: "1.5px solid #E5E5E5",
-    background: "#FFFFFF",
+    border: "1.5px solid rgba(255,255,255,0.20)",
+    background: "rgba(255,255,255,0.06)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
     cursor: "pointer",
     padding: 0,
-    WebkitTapHighlightColor: "transparent",
-    transition: "all 0.15s",
+    transition: "all 0.2s",
+    flexShrink: 0,
   },
-  headerCenter: {
+  avatarContainer: {
     display: "flex",
     alignItems: "center",
-    gap: "10px",
+    gap: "12px",
     flex: 1,
     minWidth: 0,
   },
   avatar: {
-    width: "40px",
-    height: "40px",
-    minWidth: "40px",
-    borderRadius: "50%",
-    background: "#F3F4F6",
+    width: "48px",
+    height: "48px",
+    minWidth: "48px",
+    borderRadius: "16px",
+    background: "#D1FAE5", // default; will be overridden by worker's color? we can keep as dynamic later
     color: "#1A1A1A",
-    fontSize: "14px",
-    fontWeight: "600",
+    fontSize: "16px",
+    fontWeight: "700",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
+  },
+  nameGroup: {
+    minWidth: 0,
   },
   workerName: {
-    fontSize: "15px",
-    fontWeight: "600",
-    color: "#1A1A1A",
+    fontSize: "18px",
+    fontWeight: "700",
+    color: "#FFFFFF",
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
+    letterSpacing: "-0.3px",
   },
   workerPhone: {
-    fontSize: "12px",
-    color: "#6B7280",
+    fontSize: "13px",
+    color: "rgba(255,255,255,0.60)",
     marginTop: "2px",
   },
   wagePill: {
-    fontSize: "12px",
+    fontSize: "13px",
     fontWeight: "600",
-    background: "#F3F4F6",
-    color: "#1A1A1A",
-    padding: "4px 10px",
-    borderRadius: "20px",
+    background: "rgba(255,255,255,0.10)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    color: "#FFFFFF",
+    padding: "6px 14px",
+    borderRadius: "30px",
     flexShrink: 0,
     display: "flex",
     alignItems: "baseline",
@@ -407,42 +421,69 @@ const s = {
   wageSub: {
     fontSize: "10px",
     fontWeight: "500",
-    color: "#6B7280",
+    color: "rgba(255,255,255,0.50)",
   },
-  metricsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, 1fr)",
-    gap: "8px",
-    padding: "12px 12px 0",
+
+  quickStats: {
+    display: "flex",
+    gap: "16px",
+    marginTop: "18px",
+    justifyContent: "center",
+    position: "relative",
+    zIndex: 1,
+    maxWidth: "600px",
+    marginLeft: "auto",
+    marginRight: "auto",
   },
-  metricCard: {
-    background: "#FFFFFF",
-    borderRadius: "16px",
-    border: "1px solid #F0F0F0",
-    padding: "12px 8px",
-    textAlign: "center",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
-  },
-  metricLabel: {
-    fontSize: "11px",
-    color: "#6B7280",
+  quickStat: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    fontSize: "12px",
     fontWeight: "500",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    marginBottom: "6px",
+    color: "rgba(255,255,255,0.70)",
+    background: "rgba(255,255,255,0.06)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    border: "1px solid rgba(255,255,255,0.08)",
+    padding: "4px 14px",
+    borderRadius: "30px",
   },
-  metricValue: {
-    fontSize: "24px",
-    fontWeight: "700",
-    lineHeight: 1,
+  quickDot: {
+    width: "6px",
+    height: "6px",
+    borderRadius: "50%",
+    display: "inline-block",
   },
+
+  // Panel
+  panel: {
+    background: "#F8F9FC",
+    borderRadius: "32px 32px 0 0",
+    marginTop: "-16px",
+    padding: "0 16px 40px",
+    flex: 1,
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
+    position: "relative",
+    zIndex: 2,
+  },
+  handle: {
+    width: "36px",
+    height: "4px",
+    background: "#D1D5DB",
+    borderRadius: "4px",
+    margin: "14px auto 20px",
+  },
+
+  // Earnings card
   earningsCard: {
     background: "#FFFFFF",
-    margin: "12px 12px 0",
-    borderRadius: "20px",
-    border: "1px solid #F0F0F0",
-    padding: "16px",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+    borderRadius: "24px",
+    padding: "18px 16px",
+    marginBottom: "12px",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
   },
   earningsRow: {
     display: "flex",
@@ -450,12 +491,20 @@ const s = {
     gap: "12px",
     marginBottom: "12px",
   },
-  earningsItem: { flex: 1, textAlign: "center" },
-  earningsDivider: { width: "1px", height: "36px", background: "#F0F0F0", flexShrink: 0 },
+  earningsItem: {
+    flex: 1,
+    textAlign: "center",
+  },
+  earningsDivider: {
+    width: "1px",
+    height: "36px",
+    background: "#ECECF2",
+    flexShrink: 0,
+  },
   earningsLabel: {
     fontSize: "11px",
-    color: "#6B7280",
     fontWeight: "500",
+    color: "#9CA3AF",
     textTransform: "uppercase",
     letterSpacing: "0.04em",
     marginBottom: "4px",
@@ -463,88 +512,96 @@ const s = {
   earningsValue: {
     fontSize: "18px",
     fontWeight: "700",
-    color: "#1A1A1A",
+    color: "#111827",
   },
   remainingRow: {
-    background: "#F9F9F8",
-    borderRadius: "12px",
-    padding: "10px 14px",
+    background: "#F8F9FC",
+    borderRadius: "14px",
+    padding: "12px 16px",
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  remainingLabel: { fontSize: "13px", fontWeight: "500", color: "#1A1A1A" },
-  remainingValue: { fontSize: "18px", fontWeight: "700", color: "#1A1A1A" },
+  remainingLabel: {
+    fontSize: "13px",
+    fontWeight: "500",
+    color: "#111827",
+  },
+  remainingValue: {
+    fontSize: "18px",
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  // Action buttons
   actionRow: {
     display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    padding: "12px 12px 0",
+    gap: "10px",
+    marginBottom: "16px",
   },
   whatsappBtn: {
-    width: "100%",
+    flex: 1,
     height: "48px",
     background: "#25D366",
     color: "#fff",
     border: "none",
-    borderRadius: "14px",
+    borderRadius: "16px",
     fontSize: "14px",
     fontWeight: "600",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    fontFamily: "'Inter', sans-serif",
     transition: "all 0.15s",
-    fontFamily: "'DM Sans', sans-serif",
+    boxShadow: "0 4px 12px rgba(37,211,102,0.30)",
   },
   pdfBtn: {
-    width: "100%",
+    flex: 1,
     height: "48px",
     background: "#FFFFFF",
-    color: "#1A1A1A",
-    border: "1.5px solid #E5E5E5",
-    borderRadius: "14px",
+    color: "#111827",
+    border: "1.5px solid #ECECF2",
+    borderRadius: "16px",
     fontSize: "14px",
     fontWeight: "600",
     cursor: "pointer",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    fontFamily: "'Inter', sans-serif",
     transition: "all 0.15s",
-    fontFamily: "'DM Sans', sans-serif",
   },
+
+  // History
   historySection: {
-    padding: "16px 12px 0",
+    marginTop: "4px",
   },
   historyHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: "12px",
-    flexWrap: "wrap",
-    gap: "10px",
+    marginBottom: "14px",
   },
   sectionTitle: {
     fontSize: "12px",
     fontWeight: "600",
-    color: "#6B7280",
+    color: "#9CA3AF",
     textTransform: "uppercase",
     letterSpacing: "0.06em",
   },
-  monthPickerWrapper: {
-    flexShrink: 0,
-  },
   monthPicker: {
     background: "#FFFFFF",
-    border: "1.5px solid #E5E5E5",
-    borderRadius: "12px",
-    padding: "6px 10px",
+    border: "1.5px solid #ECECF2",
+    borderRadius: "14px",
+    padding: "6px 12px",
     fontSize: "13px",
-    fontFamily: "'DM Sans', sans-serif",
-    color: "#1A1A1A",
+    fontFamily: "'Inter', sans-serif",
+    color: "#111827",
     outline: "none",
     cursor: "pointer",
   },
+
   monthsWrap: {
     display: "flex",
     flexDirection: "column",
@@ -553,16 +610,15 @@ const s = {
   monthCard: {
     background: "#FFFFFF",
     borderRadius: "20px",
-    border: "1px solid #F0F0F0",
     overflow: "hidden",
-    boxShadow: "0 1px 2px rgba(0,0,0,0.02)",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
   },
   monthHeader: {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
     padding: "12px 16px",
-    background: "#1A1A1A",
+    background: "#111827",
   },
   monthTitle: {
     fontSize: "14px",
@@ -583,23 +639,22 @@ const s = {
     justifyContent: "space-between",
     padding: "10px 16px",
     borderBottom: "1px solid #F0F0F0",
-    gap: "10px",
-    flexWrap: "nowrap",
+    gap: "8px",
   },
   dateBlock: {
     display: "flex",
     alignItems: "baseline",
     gap: "6px",
-    minWidth: "70px",
+    minWidth: "64px",
   },
   dayNum: {
     fontSize: "14px",
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: "#111827",
   },
   dayName: {
     fontSize: "11px",
-    color: "#6B7280",
+    color: "#9CA3AF",
     fontWeight: "500",
   },
   badgeBlock: {
@@ -616,7 +671,7 @@ const s = {
   },
   advanceBlock: {
     flexShrink: 0,
-    minWidth: "70px",
+    minWidth: "60px",
     textAlign: "right",
   },
   advanceAmount: {
@@ -636,15 +691,10 @@ const s = {
     background: "#FAFAFA",
     borderTop: "1px solid #F0F0F0",
   },
-  footerLeft: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-  },
   footerLabel: {
     fontSize: "11px",
     fontWeight: "600",
-    color: "#6B7280",
+    color: "#9CA3AF",
     textTransform: "uppercase",
     letterSpacing: "0.03em",
   },
@@ -667,6 +717,8 @@ const s = {
     fontWeight: "600",
     color: "#b91c1c",
   },
+
+  // Empty states
   centeredEmpty: {
     flex: 1,
     display: "flex",
@@ -675,28 +727,30 @@ const s = {
     justifyContent: "center",
     padding: "40px 20px",
     textAlign: "center",
+    background: "#0B0B16",
+    minHeight: "100dvh",
   },
   emptyState: {
     padding: "30px 20px",
     background: "#FFFFFF",
-    border: "2px dashed #E5E5E5",
+    border: "2px dashed #E5E7EB",
     borderRadius: "20px",
     textAlign: "center",
   },
-  emptyIcon:  { fontSize: "34px", marginBottom: "10px" },
-  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#1A1A1A" },
-  emptyHint:  { fontSize: "12px", color: "#6B7280", marginTop: "5px" },
+  emptyIcon: { fontSize: "34px", marginBottom: "10px" },
+  emptyTitle: { fontSize: "15px", fontWeight: "600", color: "#111827" },
+  emptyHint: { fontSize: "12px", color: "#9CA3AF", marginTop: "5px" },
   backBtn: {
     marginTop: "14px",
     height: "40px",
     padding: "0 20px",
-    background: "#1A1A1A",
+    background: "#111827",
     color: "#fff",
     border: "none",
-    borderRadius: "12px",
+    borderRadius: "14px",
     fontSize: "14px",
     fontWeight: "600",
     cursor: "pointer",
-    fontFamily: "'DM Sans', sans-serif",
+    fontFamily: "'Inter', sans-serif",
   },
 };

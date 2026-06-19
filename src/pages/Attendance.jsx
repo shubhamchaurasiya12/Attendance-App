@@ -91,222 +91,54 @@ export default function Attendance() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap');
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'DM Sans', sans-serif; background: #F5F4F0; }
-
-        .att-page {
-          min-height: 100dvh;
-          padding: 0 0 env(safe-area-inset-bottom, 24px);
-          font-family: 'DM Sans', sans-serif;
-          background: #F5F4F0;
-          color: #1A1A1A;
-        }
-        .att-inner {
-          max-width: 600px;
-          margin: 0 auto;
-          padding: 0 16px 32px;
-        }
-
-        /* top card (sticky) */
-        .att-topbar {
-          position: sticky;
-          top: 12px;
-          z-index: 10;
-          margin: 0 0 20px 0;
-        }
-        .att-card {
-          background: #FFFFFF;
-          border-radius: 24px;
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-          padding: 20px 16px;
-        }
-        .att-title {
-          font-size: 26px;
-          font-weight: 600;
-          letter-spacing: -0.5px;
-          margin-bottom: 4px;
-        }
-        .att-sub {
-          font-size: 13px;
-          color: #6B7280;
-          margin-bottom: 16px;
-        }
-        .att-date-row {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-        .att-date-label {
-          font-size: 13px;
-          font-weight: 500;
-          color: #6B7280;
-        }
-        .att-date-input {
-          flex: 1;
-          background: #F9F9F8;
-          border: 1.5px solid #E5E5E5;
-          border-radius: 14px;
-          padding: 10px 14px;
-          font-size: 14px;
-          font-family: 'DM Sans', sans-serif;
-          outline: none;
-        }
-        .att-date-input:focus {
-          border-color: #A3A3A3;
-          background: #fff;
-        }
-
-        /* toast fixed */
-        .att-toast {
-          position: fixed;
-          top: 20px;
-          right: 20px;
-          background: #1e293b;
-          color: #fff;
-          padding: 10px 20px;
-          border-radius: 40px;
-          font-size: 14px;
-          z-index: 1000;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-          pointer-events: none;
-        }
-
-        /* worker card (same design as Workers page) */
-        .att-worker-card {
-          background: #fff;
-          border-radius: 20px;
-          padding: 12px 16px;
-          margin-bottom: 12px;
-          border: 1.5px solid #F0F0F0;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          transition: transform .12s;
-        }
-        .att-worker-card:active {
-          transform: scale(.985);
-        }
-        .att-worker-name {
-          flex: 1;
-          font-weight: 500;
-          font-size: 15px;
-          color: #1A1A1A;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          min-width: 0;
-        }
-        .att-status-buttons {
-          display: flex;
-          gap: 8px;
-          flex-shrink: 0;
-        }
-        .att-circle-btn {
-          width: 44px;
-          height: 44px;
-          border-radius: 44px;
-          border: 1.5px solid #E5E5E5;
-          background: #fff;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.15s;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .att-circle-btn:active {
-          transform: scale(0.96);
-        }
-        .att-advance-input {
-          width: 90px;
-          background: #F9F9F8;
-          border: 1.5px solid #E5E5E5;
-          border-radius: 40px;
-          padding: 10px 8px;
-          font-size: 14px;
-          font-family: 'DM Sans', sans-serif;
-          text-align: center;
-          outline: none;
-          flex-shrink: 0;
-        }
-        .att-advance-input:focus {
-          border-color: #A3A3A3;
-          background: #fff;
-        }
-        .att-empty {
-          text-align: center;
-          padding: 48px 0;
-          color: #9CA3AF;
-        }
-        .att-empty-icon {
-          font-size: 36px;
-          margin-bottom: 12px;
-        }
-
-        /* responsive */
-        @media (max-width: 480px) {
-          .att-card {
-            padding: 16px;
-          }
-          .att-title {
-            font-size: 22px;
-          }
-          .att-date-row {
-            flex-direction: column;
-            align-items: stretch;
-          }
-          .att-worker-card {
-            padding: 10px 12px;
-            gap: 8px;
-          }
-          .att-circle-btn {
-            width: 38px;
-            height: 38px;
-            font-size: 14px;
-          }
-          .att-advance-input {
-            width: 70px;
-            font-size: 13px;
-            padding: 8px 4px;
-          }
-          .att-worker-name {
-            font-size: 14px;
-          }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Inter', sans-serif;
+          background: #0B0B16;
+          -webkit-font-smoothing: antialiased;
         }
       `}</style>
 
-      <div className="att-page">
-        <div className="att-inner">
-          {/* Sticky top card with date picker */}
-          <div className="att-topbar">
-            <div className="att-card">
-              <h1 className="att-title">Attendance</h1>
-              <p className="att-sub">Mark daily attendance</p>
-              <div className="att-date-row">
-                <span className="att-date-label">Date</span>
-                <input
-                  type="date"
-                  className="att-date-input"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                />
-              </div>
+      <div style={s.page}>
+        {/* ─── DARK HEADER ─── */}
+        <div style={s.header}>
+          <div style={s.headerGlow} />
+          <div style={s.headerInner}>
+            <div style={s.titleGroup}>
+              <h1 style={s.title}>Attendance</h1>
+              <p style={s.subtitle}>Mark daily attendance</p>
             </div>
+            <div style={s.statPill}>
+              <span style={s.statDot} />
+              {activeWorkers.length} active
+            </div>
+          </div>
+        </div>
+
+        {/* ─── FLOATING WHITE PANEL ─── */}
+        <div style={s.panel}>
+          <div style={s.handle} />
+
+          {/* Date picker */}
+          <div style={s.dateRow}>
+            <label style={s.dateLabel}>Date</label>
+            <input
+              type="date"
+              style={s.dateInput}
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
           </div>
 
           {/* Toast message */}
-          {message && <div className="att-toast">{message}</div>}
+          {message && <div style={s.toast}>{message}</div>}
 
           {/* Workers list */}
           {activeWorkers.length === 0 ? (
-            <div className="att-empty">
-              <div className="att-empty-icon">👷</div>
-              <p>No active workers</p>
+            <div style={s.empty}>
+              <div style={s.emptyIcon}>👷</div>
+              <p style={s.emptyTitle}>No active workers</p>
             </div>
           ) : (
             activeWorkers.map((w) => {
@@ -314,41 +146,41 @@ export default function Attendance() {
               const selectedStatus = current.status;
 
               return (
-                <div key={w.id} className="att-worker-card">
-                  <div className="att-worker-name" title={w.name}>
+                <div key={w.id} style={s.workerCard}>
+                  <div style={s.workerName} title={w.name}>
                     {w.name}
                   </div>
-                  <div className="att-status-buttons">
+                  <div style={s.statusGroup}>
                     <button
-                      className="att-circle-btn"
-                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.ABSENT)}
                       style={{
+                        ...s.statusBtn,
                         background: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#fee2e2" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#f87171" : "#E5E5E5",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#f87171" : "#ECECF2",
                         color: "#b91c1c",
                       }}
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.ABSENT)}
                     >
                       A
                     </button>
                     <button
-                      className="att-circle-btn"
-                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.FULL)}
                       style={{
+                        ...s.statusBtn,
                         background: selectedStatus === ATTENDANCE_STATUS.FULL ? "#dcfce7" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.FULL ? "#4ade80" : "#E5E5E5",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.FULL ? "#4ade80" : "#ECECF2",
                         color: "#166534",
                       }}
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.FULL)}
                     >
                       P
                     </button>
                     <button
-                      className="att-circle-btn"
-                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.OVERTIME)}
                       style={{
+                        ...s.statusBtn,
                         background: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#fef9c3" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#facc15" : "#E5E5E5",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#facc15" : "#ECECF2",
                         color: "#854d0e",
                       }}
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.OVERTIME)}
                     >
                       P+
                     </button>
@@ -356,7 +188,7 @@ export default function Attendance() {
                   <input
                     type="number"
                     placeholder="₹"
-                    className="att-advance-input"
+                    style={s.advanceInput}
                     value={current.advance || ""}
                     onChange={(e) => setAdvance(w.id, e.target.value)}
                   />
@@ -369,3 +201,266 @@ export default function Attendance() {
     </>
   );
 }
+
+// ─── Styles ──────────────────────────────────────────────────
+const s = {
+  page: {
+    minHeight: "100dvh",
+    background: "#0B0B16",
+    fontFamily: "'Inter', sans-serif",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+
+  // Dark header
+  header: {
+    background: "#0B0B16",
+    padding: "48px 24px 28px",
+    position: "relative",
+    overflow: "hidden",
+    flexShrink: 0,
+  },
+  headerGlow: {
+    position: "absolute",
+    inset: 0,
+    background:
+      "radial-gradient(ellipse 340px 240px at 90% -10%, rgba(111,107,255,0.22) 0%, transparent 70%)," +
+      "radial-gradient(ellipse 220px 200px at -10% 80%, rgba(138,135,255,0.12) 0%, transparent 70%)",
+    pointerEvents: "none",
+  },
+  headerInner: {
+    maxWidth: "600px",
+    margin: "0 auto",
+    position: "relative",
+    zIndex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+  },
+  titleGroup: {
+    minWidth: 0,
+  },
+  title: {
+    fontSize: "34px",
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: "-1px",
+    lineHeight: 1.1,
+  },
+  subtitle: {
+    fontSize: "14px",
+    color: "rgba(255,255,255,0.60)",
+    marginTop: "4px",
+  },
+  statPill: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+    padding: "8px 16px",
+    background: "rgba(255,255,255,0.07)",
+    backdropFilter: "blur(16px)",
+    WebkitBackdropFilter: "blur(16px)",
+    border: "1px solid rgba(255,255,255,0.11)",
+    borderRadius: "30px",
+    color: "#FFFFFF",
+    fontSize: "13px",
+    fontWeight: "600",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+  },
+  statDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    background: "#22C55E",
+    boxShadow: "0 0 8px rgba(34,197,94,0.6)",
+  },
+
+  // Panel
+  panel: {
+    background: "#F8F9FC",
+    borderRadius: "32px 32px 0 0",
+    marginTop: "-16px",
+    padding: "0 16px 40px",
+    flex: 1,
+    overflowY: "auto",
+    WebkitOverflowScrolling: "touch",
+    boxShadow: "0 -4px 24px rgba(0,0,0,0.18)",
+    position: "relative",
+    zIndex: 2,
+  },
+  handle: {
+    width: "36px",
+    height: "4px",
+    background: "#D1D5DB",
+    borderRadius: "4px",
+    margin: "14px auto 20px",
+  },
+
+  // Date picker
+  dateRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "14px",
+    background: "#FFFFFF",
+    borderRadius: "24px",
+    padding: "16px 18px",
+    marginBottom: "16px",
+    boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+  },
+  dateLabel: {
+    fontSize: "13px",
+    fontWeight: "600",
+    color: "#6B7280",
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+  },
+  dateInput: {
+    flex: 1,
+    background: "#F8F9FC",
+    border: "1.5px solid #ECECF2",
+    borderRadius: "14px",
+    padding: "10px 14px",
+    fontSize: "14px",
+    fontFamily: "'Inter', sans-serif",
+    color: "#111827",
+    outline: "none",
+    transition: "all 0.2s",
+    minWidth: 0,
+  },
+
+  // Toast
+  toast: {
+    position: "fixed",
+    top: "20px",
+    right: "20px",
+    background: "#111827",
+    color: "#fff",
+    padding: "10px 20px",
+    borderRadius: "40px",
+    fontSize: "14px",
+    fontWeight: "500",
+    zIndex: 1000,
+    boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+    pointerEvents: "none",
+    fontFamily: "'Inter', sans-serif",
+  },
+
+  // Worker cards
+  workerCard: {
+    background: "#FFFFFF",
+    borderRadius: "20px",
+    padding: "12px 16px",
+    marginBottom: "10px",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    border: "1.5px solid transparent",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
+    transition: "all 0.2s",
+    flexWrap: "wrap",
+  },
+  workerName: {
+    flex: "1 1 100px",
+    fontSize: "15px",
+    fontWeight: "600",
+    color: "#111827",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    minWidth: 0,
+  },
+  statusGroup: {
+    display: "flex",
+    gap: "8px",
+    flexShrink: 0,
+  },
+  statusBtn: {
+    width: "44px",
+    height: "44px",
+    borderRadius: "44px",
+    border: "1.5px solid #ECECF2",
+    background: "#FFFFFF",
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
+    transition: "all 0.15s",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    fontFamily: "'Inter', sans-serif",
+  },
+  advanceInput: {
+    width: "80px",
+    background: "#F8F9FC",
+    border: "1.5px solid #ECECF2",
+    borderRadius: "40px",
+    padding: "10px 6px",
+    fontSize: "14px",
+    fontFamily: "'Inter', sans-serif",
+    textAlign: "center",
+    outline: "none",
+    transition: "all 0.2s",
+    flexShrink: 0,
+  },
+
+  // Empty
+  empty: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    padding: "48px 0",
+    color: "#9CA3AF",
+  },
+  emptyIcon: {
+    fontSize: "36px",
+    marginBottom: "12px",
+  },
+  emptyTitle: {
+    fontSize: "15px",
+    fontWeight: "500",
+    color: "#6B7280",
+  },
+
+  // Responsive
+  "@media (max-width: 480px)": {
+    header: {
+      padding: "40px 18px 24px",
+    },
+    title: {
+      fontSize: "28px",
+    },
+    statPill: {
+      fontSize: "12px",
+      padding: "6px 12px",
+    },
+    workerCard: {
+      padding: "10px 12px",
+      gap: "10px",
+    },
+    statusBtn: {
+      width: "38px",
+      height: "38px",
+      fontSize: "13px",
+    },
+    advanceInput: {
+      width: "70px",
+      fontSize: "13px",
+      padding: "8px 4px",
+    },
+    dateRow: {
+      padding: "14px 16px",
+      flexWrap: "wrap",
+    },
+    dateLabel: {
+      width: "100%",
+      marginBottom: "4px",
+    },
+    dateInput: {
+      width: "100%",
+    },
+  },
+};
