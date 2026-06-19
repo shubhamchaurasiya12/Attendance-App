@@ -10,25 +10,25 @@ import Workers from "./pages/Workers";
 import Attendance from "./pages/Attendance";
 import WorkerDetails from "./pages/WorkerDetails";
 
-// ── Icons – redesigned to match new theme ──
+// ── Icons – updated to use white for inactive, light for active ──
 const IconWorkers = ({ active }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-    <circle cx="9" cy="7" r="3.5" stroke={active ? "#1A1A1A" : "#9CA3AF"} strokeWidth="1.8"/>
-    <path d="M2 20c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke={active ? "#1A1A1A" : "#9CA3AF"} strokeWidth="1.8" strokeLinecap="round"/>
-    <path d="M17 11c1.657 0 3 1.343 3 3v6" stroke={active ? "#1A1A1A" : "#9CA3AF"} strokeWidth="1.8" strokeLinecap="round"/>
-    <circle cx="17" cy="8" r="2.5" stroke={active ? "#1A1A1A" : "#9CA3AF"} strokeWidth="1.8"/>
+    <circle cx="9" cy="7" r="3.5" stroke={active ? "#FFFFFF" : "rgba(255,255,255,0.55)"} strokeWidth="1.8"/>
+    <path d="M2 20c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke={active ? "#FFFFFF" : "rgba(255,255,255,0.55)"} strokeWidth="1.8" strokeLinecap="round"/>
+    <path d="M17 11c1.657 0 3 1.343 3 3v6" stroke={active ? "#FFFFFF" : "rgba(255,255,255,0.55)"} strokeWidth="1.8" strokeLinecap="round"/>
+    <circle cx="17" cy="8" r="2.5" stroke={active ? "#FFFFFF" : "rgba(255,255,255,0.55)"} strokeWidth="1.8"/>
   </svg>
 );
 
 const IconAttendance = ({ active }) => (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-    <rect x="3" y="5" width="18" height="16" rx="2.5" stroke={active ? "#1A1A1A" : "#9CA3AF"} strokeWidth="1.8"/>
-    <path d="M16 3v4M8 3v4M3 10h18" stroke={active ? "#1A1A1A" : "#9CA3AF"} strokeWidth="1.8" strokeLinecap="round"/>
-    <path d="M8 15l2.5 2.5L16 13" stroke={active ? "#1A1A1A" : "#9CA3AF"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    <rect x="3" y="5" width="18" height="16" rx="2.5" stroke={active ? "#FFFFFF" : "rgba(255,255,255,0.55)"} strokeWidth="1.8"/>
+    <path d="M16 3v4M8 3v4M3 10h18" stroke={active ? "#FFFFFF" : "rgba(255,255,255,0.55)"} strokeWidth="1.8" strokeLinecap="round"/>
+    <path d="M8 15l2.5 2.5L16 13" stroke={active ? "#FFFFFF" : "rgba(255,255,255,0.55)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>
 );
 
-// ── AppShell (decides when to hide nav) ──
+// ── AppShell ──
 function AppShell() {
   const location = useLocation();
   const hideNav = location.pathname.startsWith("/worker/");
@@ -51,7 +51,7 @@ function AppShell() {
                 <IconWorkers active={isActive} />
                 <span style={{
                   ...s.navLabel,
-                  color: isActive ? "#1A1A1A" : "#9CA3AF",
+                  color: isActive ? "#FFFFFF" : "rgba(255,255,255,0.55)",
                   fontWeight: isActive ? "600" : "500",
                 }}>
                   Workers
@@ -66,7 +66,7 @@ function AppShell() {
                 <IconAttendance active={isActive} />
                 <span style={{
                   ...s.navLabel,
-                  color: isActive ? "#1A1A1A" : "#9CA3AF",
+                  color: isActive ? "#FFFFFF" : "rgba(255,255,255,0.55)",
                   fontWeight: isActive ? "600" : "500",
                 }}>
                   Attendance
@@ -89,35 +89,42 @@ export default function App() {
   );
 }
 
-// 🎨 Updated styling – matches the app’s design system
+// 🎨 Updated styles – dark theme with glassmorphism
 const s = {
   container: {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#F5F4F0",      // matches page background
-    fontFamily: "'DM Sans', sans-serif",
+    background: "#0B0B16",      // matches page background
+    fontFamily: "'Inter', sans-serif",
+    overflow: "hidden",
   },
   content: {
     flex: 1,
     overflow: "auto",
+    // let the page components handle their own scroll
   },
   nav: {
     display: "flex",
     justifyContent: "space-around",
     alignItems: "center",
-    background: "#FFFFFF",
-    borderTop: "1px solid #F0F0F0",
-    padding: "8px 16px 12px",
-    boxShadow: "0 -2px 8px rgba(0, 0, 0, 0.02)",
+    background: "rgba(11, 11, 22, 0.75)",
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    borderTop: "1px solid rgba(255,255,255,0.08)",
+    padding: "6px 16px 10px",
+    paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+    flexShrink: 0,
   },
   navItem: {
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    gap: "5px",
+    gap: "4px",
     padding: "6px 0",
     transition: "transform 0.2s ease",
+    borderRadius: "30px",
+    padding: "6px 14px",
   },
   navLabel: {
     fontSize: "11px",
@@ -127,18 +134,23 @@ const s = {
   navLink: {
     textDecoration: "none",
     borderRadius: "40px",
-    padding: "4px 12px",
+    padding: "2px 6px",
     transition: "all 0.2s ease",
     WebkitTapHighlightColor: "transparent",
+    // subtle active background highlight
   },
 };
 
-// Add hover effect (subtle lift)
+// Add hover effect (subtle lift) and active background
 const addNavStyles = () => {
   const styleSheet = document.createElement("style");
   styleSheet.textContent = `
     a[href="/"]:hover div, a[href="/attendance"]:hover div {
       transform: translateY(-1px);
+    }
+    a[href="/"].active div, a[href="/attendance"].active div {
+      background: rgba(255,255,255,0.08);
+      border-radius: 30px;
     }
   `;
   document.head.appendChild(styleSheet);
