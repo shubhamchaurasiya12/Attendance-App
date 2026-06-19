@@ -384,8 +384,8 @@ export default function Workers() {
         }
         .wk-report-btn:hover { background: #DCFCE7; transform: translateY(-1px); }
         .wk-month {
-          flex: 1;
-          min-width: 130px;
+          flex: 1 1 140px; /* allow grow/shrink with a base width */
+          min-width: 100px; /* reduced from 130px for better responsiveness */
           background: #F8F9FC;
           border: 1.5px solid #ECECF2;
           border-radius: 14px;
@@ -625,12 +625,39 @@ export default function Workers() {
           .wk-hero-title { font-size: 32px; }
           .wk-panel { padding-left: 14px; padding-right: 14px; }
           .wk-toolbar { padding: 16px 14px 14px; }
-          .wk-row-c { flex-wrap: wrap; }
-          .wk-month { min-width: 100%; }
+          .wk-row-c {
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+          .wk-toggle, .wk-report-btn {
+            flex: 1 1 auto; /* allow buttons to shrink */
+            padding: 8px 12px;
+            font-size: 12px;
+          }
+          .wk-month {
+            flex: 1 1 100%; /* take full width on small screens */
+            min-width: 0;
+            width: 100%;
+          }
           .wk-form-row { flex-direction: column; }
           .wk-card-actions { flex-direction: row; }
           .wk-card { padding: 14px 12px; }
           .wk-avatar { width: 42px; height: 42px; font-size: 13px; border-radius: 13px; }
+        }
+
+        /* Additional breakpoint for medium screens */
+        @media (min-width: 481px) and (max-width: 600px) {
+          .wk-row-c {
+            gap: 8px;
+            flex-wrap: wrap;
+          }
+          .wk-month {
+            flex: 1 1 100%;
+            min-width: 0;
+          }
+          .wk-toggle, .wk-report-btn {
+            flex: 0 1 auto;
+          }
         }
 
         @media (prefers-reduced-motion: reduce) {
