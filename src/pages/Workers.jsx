@@ -66,6 +66,19 @@ export default function Workers() {
 
   const navigate = useNavigate();
 
+  /* ── set dark status bar on mobile ── */
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', '#0B0B16');
+    } else {
+      const newMeta = document.createElement('meta');
+      newMeta.name = 'theme-color';
+      newMeta.content = '#0B0B16';
+      document.head.appendChild(newMeta);
+    }
+  }, []);
+
   useEffect(() => { const u = subscribeWorkers(setWorkers);    return u; }, []);
   useEffect(() => { const u = subscribeAttendance(setAttendance); return u; }, []);
 
