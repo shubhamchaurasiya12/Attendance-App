@@ -250,87 +250,85 @@ export default function Attendance() {
           font-family: 'Inter', sans-serif;
         }
 
-        /* ─── WORKER CARDS ─── */
+        /* ─── WORKER CARDS (unchanged from original) ─── */
         .att-worker-card {
-          background: #FFFFFF;
+          background: #fff;
           border-radius: 20px;
           padding: 12px 16px;
-          margin-bottom: 10px;
+          margin-bottom: 12px;
+          border: 1.5px solid #F0F0F0;
           display: flex;
           align-items: center;
           gap: 12px;
-          border: 1.5px solid transparent;
-          box-shadow: 0 2px 12px rgba(0,0,0,0.04);
-          transition: all 0.2s;
-          flex-wrap: wrap;
+          transition: transform .12s;
+        }
+        .att-worker-card:active {
+          transform: scale(.985);
         }
         .att-worker-name {
-          flex: 1 1 100px;
+          flex: 1;
+          font-weight: 500;
           font-size: 15px;
-          font-weight: 600;
-          color: #111827;
+          color: #1A1A1A;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
           min-width: 0;
         }
-        .att-status-group {
+        .att-status-buttons {
           display: flex;
           gap: 8px;
           flex-shrink: 0;
         }
-        .att-status-btn {
+        .att-circle-btn {
           width: 44px;
           height: 44px;
           border-radius: 44px;
-          border: 1.5px solid #ECECF2;
-          background: #FFFFFF;
-          font-size: 15px;
-          font-weight: 700;
+          border: 1.5px solid #E5E5E5;
+          background: #fff;
+          font-size: 16px;
+          font-weight: 600;
           cursor: pointer;
           transition: all 0.15s;
           display: inline-flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
-          font-family: 'Inter', sans-serif;
         }
-        .att-status-btn:active { transform: scale(0.94); }
+        .att-circle-btn:active {
+          transform: scale(0.96);
+        }
         .att-advance-input {
-          width: 80px;
-          background: #F8F9FC;
-          border: 1.5px solid #ECECF2;
+          width: 90px;
+          background: #F9F9F8;
+          border: 1.5px solid #E5E5E5;
           border-radius: 40px;
-          padding: 10px 6px;
+          padding: 10px 8px;
           font-size: 14px;
-          font-family: 'Inter', sans-serif;
+          font-family: 'Inter', sans-serif; /* updated font to match theme */
           text-align: center;
           outline: none;
-          transition: all 0.2s;
           flex-shrink: 0;
         }
         .att-advance-input:focus {
-          border-color: #6F6BFF;
+          border-color: #A3A3A3;
           background: #fff;
-          box-shadow: 0 0 0 3px rgba(111,107,255,0.10);
         }
-
-        /* ─── EMPTY ─── */
         .att-empty {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
+          text-align: center;
           padding: 48px 0;
           color: #9CA3AF;
         }
-        .att-empty-icon { font-size: 36px; margin-bottom: 12px; }
-        .att-empty-title {
+        .att-empty-icon {
+          font-size: 36px;
+          margin-bottom: 12px;
+        }
+        .att-empty-text {
           font-size: 15px;
           font-weight: 500;
-          color: #6B7280;
         }
 
-        /* ─── RESPONSIVE ─── */
+        /* ─── RESPONSIVE (cards unchanged) ─── */
         @media (max-width: 480px) {
           .att-header { padding: 40px 18px 24px; }
           .att-title { font-size: 28px; }
@@ -341,39 +339,23 @@ export default function Attendance() {
           }
           .att-date-label { width: 100%; margin-bottom: 4px; }
           .att-date-input { width: 100%; }
+          /* card styles unchanged */
           .att-worker-card {
             padding: 10px 12px;
             gap: 8px;
           }
-          .att-worker-name {
-            flex: 1 1 100%;
-            white-space: normal;
-            font-size: 14px;
-            margin-bottom: 2px;
-          }
-          .att-status-group { gap: 6px; }
-          .att-status-btn {
+          .att-circle-btn {
             width: 38px;
             height: 38px;
-            font-size: 13px;
+            font-size: 14px;
           }
           .att-advance-input {
             width: 70px;
             font-size: 13px;
             padding: 8px 4px;
           }
-        }
-
-        @media (max-width: 400px) {
-          .att-status-btn {
-            width: 34px;
-            height: 34px;
-            font-size: 12px;
-          }
-          .att-advance-input {
-            width: 60px;
-            font-size: 12px;
-            padding: 6px 4px;
+          .att-worker-name {
+            font-size: 14px;
           }
         }
       `}</style>
@@ -411,11 +393,11 @@ export default function Attendance() {
           {/* Toast message */}
           {message && <div className="att-toast">{message}</div>}
 
-          {/* Workers list */}
+          {/* Workers list – cards unchanged */}
           {activeWorkers.length === 0 ? (
             <div className="att-empty">
               <div className="att-empty-icon">👷</div>
-              <p className="att-empty-title">No active workers</p>
+              <p className="att-empty-text">No active workers</p>
             </div>
           ) : (
             activeWorkers.map((w) => {
@@ -427,37 +409,37 @@ export default function Attendance() {
                   <div className="att-worker-name" title={w.name}>
                     {w.name}
                   </div>
-                  <div className="att-status-group">
+                  <div className="att-status-buttons">
                     <button
-                      className="att-status-btn"
+                      className="att-circle-btn"
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.ABSENT)}
                       style={{
                         background: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#fee2e2" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#f87171" : "#ECECF2",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.ABSENT ? "#f87171" : "#E5E5E5",
                         color: "#b91c1c",
                       }}
-                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.ABSENT)}
                     >
                       A
                     </button>
                     <button
-                      className="att-status-btn"
+                      className="att-circle-btn"
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.FULL)}
                       style={{
                         background: selectedStatus === ATTENDANCE_STATUS.FULL ? "#dcfce7" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.FULL ? "#4ade80" : "#ECECF2",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.FULL ? "#4ade80" : "#E5E5E5",
                         color: "#166534",
                       }}
-                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.FULL)}
                     >
                       P
                     </button>
                     <button
-                      className="att-status-btn"
+                      className="att-circle-btn"
+                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.OVERTIME)}
                       style={{
                         background: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#fef9c3" : "#fff",
-                        borderColor: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#facc15" : "#ECECF2",
+                        borderColor: selectedStatus === ATTENDANCE_STATUS.OVERTIME ? "#facc15" : "#E5E5E5",
                         color: "#854d0e",
                       }}
-                      onClick={() => setStatus(w.id, ATTENDANCE_STATUS.OVERTIME)}
                     >
                       P+
                     </button>
